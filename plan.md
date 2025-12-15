@@ -73,16 +73,29 @@ Goal: Make it a proper system service.
     - [x] Update README.md with installation and usage instructions
 
 ## Phase 5: Scalability & Intelligence Optimization
+
 Goal: Reduce Gemini API costs, improve context with RAG, and optimize local performance for heavy loads.
 
-- [ ] **Database Optimization**
-    - [ ] Enable SQLite WAL (Write-Ahead Logging) mode for concurrent read/write.
-    - [ ] Implement Data Retention Policy (Auto-prune metrics > 24h, or downsample).
-    - [ ] Add Database Indexing on timestamp columns for faster retrieval.
-- [ ] **Smart AI Context (RAG)**
-    - [ ] Integrate a lightweight Vector Store (e.g., `chromem-go` or simple vector cache).
-    - [ ] Implement Log Deduplication (Collapse repeated logs before analysis).
-    - [ ] Implement "Insight Caching": Store embedding of problem -> Insight. If similar problem occurs, return cached insight instead of calling API.
+
+
+- [x] **Database Optimization**
+
+    - [x] Enable SQLite WAL (Write-Ahead Logging) mode for concurrent read/write.
+
+    - [x] Implement Data Retention Policy (Auto-prune metrics > 24h, or downsample).
+
+    - [x] Add Database Indexing on timestamp columns for faster retrieval.
+
+- [x] **Smart AI Context (RAG)**
+
+    - [x] Integrate a lightweight Vector Store (e.g., `chromem-go` or simple vector cache).
+
+    - [x] Implement Log Deduplication (Collapse repeated logs before analysis).
+
+    - [x] Implement "Insight Caching": Store embedding of problem -> Insight. If similar problem occurs, return cached insight instead of calling API.
+
 - [ ] **Performance Tuning**
+
     - [ ] Optimize Metric Collector (Avoid memory allocations in hot loops).
+
     - [ ] Implement Adaptive Polling (Slow down polling when system is idle, speed up under load).
