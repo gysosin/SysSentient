@@ -10,6 +10,7 @@ import (
 	"sys-sentient/internal/collector"
 	"sys-sentient/internal/config"
 	"sys-sentient/internal/pii"
+	"sys-sentient/internal/server"
 	"sys-sentient/internal/storage"
 )
 
@@ -32,7 +33,7 @@ func main() {
 	defer store.Close()
 	fmt.Printf("Storage initialized at %s\n", cfg.Database.Path)
 
-	// 3. Initialize AI Service (Optional, might fail if no key)
+	// 3. Initialize AI Service
 	ctx := context.Background()
 	aiService, err := ai.NewAIService(ctx, cfg.Gemini)
 	if err != nil {
@@ -41,14 +42,22 @@ func main() {
 		fmt.Println("AI Service initialized.")
 	}
 
-	// 4. Initialize PII Scrubber
+	// 4. Start API Server
+	srv := server.NewServer(cfg.Server, store, aiService)
+	go func() {
+		if err := srv.Start(); err != nil {
+			log.Fatalf("API Server failed: %v", err)
+		}
+	}()
+
+	// 5. Initialize PII Scrubber
 	scrubber := pii.NewScrubber(cfg.Privacy.MaskIPs, cfg.Privacy.MaskEmails, cfg.Privacy.MaskUsernames)
 
-	// 5. Initialize Collector
-	col := collector.NewCollector()
+	// 6. Initialize Collector
+col := collector.NewCollector()
 	fmt.Println("Collector initialized. Starting polling loop...")
 
-	// 6. Polling Loop
+	// 7. Polling Loop
 	interval := time.Duration(cfg.Collector.PollIntervalSeconds) * time.Second
 	if interval == 0 {
 		interval = 2 * time.Second

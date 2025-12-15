@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SystemMetrics, Process, LogEntry, AIAnalysisResult } from './types';
-import { getSimulatedMetrics, getSimulatedProcesses, getSimulatedLogs, toggleStressMode } from './services/mockSystemData';
-import { analyzeSystemHealth } from './services/geminiService';
+import { fetchMetricsHistory, triggerAnalysis, fetchLatestInsight } from './services/api';
 import SystemChart from './components/SystemChart';
 import ProcessList from './components/ProcessList';
 import AIInsightPanel from './components/AIInsightPanel';
-import { REFRESH_RATE_MS, HISTORY_LENGTH } from './constants';
+import { REFRESH_RATE_MS } from './constants';
 
 const App: React.FC = () => {
   const [metricsHistory, setMetricsHistory] = useState<SystemMetrics[]>([]);
@@ -14,44 +13,38 @@ const App: React.FC = () => {
   const [uptime, setUptime] = useState(0);
   
   // AI State
-  const [isStressMode, setIsStressMode] = useState(false);
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const historyRef = useRef<SystemMetrics[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const tick = () => {
-      const newMetrics = getSimulatedMetrics();
-      const newProcesses = getSimulatedProcesses();
+    const fetchData = async () => {
+      const { metrics, processes: procs } = await fetchMetricsHistory();
+      if (metrics.length > 0) {
+        setMetricsHistory(metrics);
+      }
+      if (procs.length > 0) {
+        setProcesses(procs);
+      }
+      setUptime(prev => prev + REFRESH_RATE_MS/1000);
       
-      setMetricsHistory(prev => {
-        const updated = [...prev, newMetrics];
-        if (updated.length > HISTORY_LENGTH) {
-          updated.shift();
-        }
-        historyRef.current = updated;
-        return updated;
-      });
-
-      setProcesses(newProcesses);
-      setUptime(prev => prev + 2);
+      // Poll for insights occasionally or just on load?
+      // Let's check for new insights if we don't have one or every few ticks
+      const latestInsight = await fetchLatestInsight();
+      if (latestInsight) {
+          // Only update if different? For now just set it.
+          // setAiResult(latestInsight);
+          // Wait, if user ran diagnostics manually, we might overwrite it.
+          // Let's only set it if we have nothing.
+          setAiResult(prev => prev ? prev : latestInsight);
+      }
     };
 
-    tick();
-    const intervalId = setInterval(tick, REFRESH_RATE_MS);
+    fetchData();
+    const intervalId = setInterval(fetchData, REFRESH_RATE_MS);
     return () => clearInterval(intervalId);
   }, []);
-
-  useEffect(() => {
-    toggleStressMode(isStressMode);
-    if (isStressMode) {
-        setLogs(getSimulatedLogs());
-    } else {
-        setLogs([]);
-    }
-  }, [isStressMode]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -60,22 +53,22 @@ const App: React.FC = () => {
 
   const handleRunDiagnostics = async () => {
     setIsAiLoading(true);
-    const currentMetrics = historyRef.current[historyRef.current.length - 1];
-    await new Promise(r => setTimeout(r, 600));
-    const result = await analyzeSystemHealth(currentMetrics, processes, logs);
-    setAiResult(result);
+    const result = await triggerAnalysis();
+    if (result) {
+        setAiResult(result);
+    }
     setIsAiLoading(false);
   };
 
-  const currentMetric = metricsHistory[metricsHistory.length - 1] || {
-    cpuLoad: 0, memoryUsed: 0, memoryTotal: 16384, temperature: 0, diskRead: 0, diskWrite: 0, networkRx: 0, networkTx: 0
+  const currentMetric = metricsHistory.length > 0 ? metricsHistory[metricsHistory.length - 1] : {
+    timestamp: Date.now(), cpuLoad: 0, memoryUsed: 0, memoryTotal: 16384, temperature: 0, diskRead: 0, diskWrite: 0, networkRx: 0, networkTx: 0
   };
 
   // Format uptime
   const formatUptime = (sec: number) => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
+    const s = Math.floor(sec % 60);
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -93,7 +86,7 @@ const App: React.FC = () => {
              <h1 className="text-3xl font-bold text-white tracking-tighter uppercase glitch-text" data-text="SysSentient">
                SysSentient
              </h1>
-             <span className="px-2 py-0.5 border border-gray-600 text-[10px] text-gray-400 rounded bg-gray-900/50">V.2.0.4-BETA</span>
+             <span className="px-2 py-0.5 border border-gray-600 text-[10px] text-gray-400 rounded bg-gray-900/50">V.2.1.0-LIVE</span>
            </div>
            <p className="text-neon-blue text-xs mt-1 tracking-widest uppercase opacity-70 ml-6">> Intelligent Kernel Monitor Interface</p>
         </div>
@@ -102,20 +95,6 @@ const App: React.FC = () => {
           <div className="text-right">
              <span className="text-[10px] text-gray-500 uppercase tracking-widest mr-2">System_Uptime</span>
              <span className="font-mono text-neon-green text-lg">{formatUptime(uptime)}</span>
-          </div>
-          
-          <div className="flex items-center gap-4">
-             <button 
-                onClick={() => setIsStressMode(!isStressMode)}
-                className={`
-                   px-4 py-1.5 text-xs font-bold uppercase tracking-wider border transition-all duration-300
-                   ${isStressMode 
-                     ? 'bg-neon-red/10 border-neon-red text-neon-red shadow-[0_0_15px_rgba(255,0,60,0.4)] animate-pulse-fast' 
-                     : 'bg-transparent border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white'}
-                `}
-              >
-                {isStressMode ? '[!] STRESS_TEST_ACTIVE' : 'INITIATE_STRESS_TEST'}
-              </button>
           </div>
         </div>
       </header>
@@ -130,7 +109,7 @@ const App: React.FC = () => {
               {[
                 { label: 'CPU_Load', val: currentMetric.cpuLoad.toFixed(1) + '%', alert: currentMetric.cpuLoad > 80, color: 'text-neon-purple' },
                 { label: 'RAM_Usage', val: (currentMetric.memoryUsed / 1024).toFixed(1) + 'GB', alert: false, color: 'text-neon-blue' },
-                { label: 'Core_Temp', val: currentMetric.temperature.toFixed(0) + '°C', alert: currentMetric.temperature > 80, color: 'text-orange-400' },
+                { label: 'Core_Temp', val: 'N/A', alert: false, color: 'text-orange-400' },
                 { label: 'Net_Traffic', val: currentMetric.networkRx.toFixed(0) + 'KB/s', alert: false, color: 'text-neon-green' }
               ].map((stat, i) => (
                 <div key={i} className={`bg-gray-900/50 border ${stat.alert ? 'border-neon-red animate-pulse' : 'border-gray-800'} p-4 relative overflow-hidden group hover:border-gray-600 transition-colors`}>
@@ -170,17 +149,7 @@ const App: React.FC = () => {
                <span className="ml-auto text-gray-600 text-[10px]">TAIL -F</span>
              </div>
              <div className="overflow-y-auto space-y-1 flex-grow scrollbar-hide">
-               {logs.length === 0 ? (
-                 <div className="text-gray-700 italic">Listening for system events...<span className="animate-pulse">_</span></div>
-               ) : (
-                 logs.map((log, idx) => (
-                    <div key={idx} className="flex gap-2 animate-[fadeIn_0.1s_ease-out]">
-                       <span className="text-gray-600">[{log.timestamp.split('T')[1].split('.')[0]}]</span>
-                       <span className={`${log.level === 'ERROR' ? 'text-neon-red bg-neon-red/10 px-1' : 'text-yellow-500'}`}>{log.level}</span>
-                       <span className="text-gray-300">{log.message}</span>
-                    </div>
-                 ))
-               )}
+               <div className="text-gray-700 italic">Log streaming API pending...<span className="animate-pulse">_</span></div>
                <div ref={logsEndRef} />
              </div>
            </div>

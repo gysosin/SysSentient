@@ -2,6 +2,8 @@ export const APP_NAME = "SysSentient";
 export const REFRESH_RATE_MS = 2000; // 2 seconds
 export const HISTORY_LENGTH = 30; // 60 seconds of history on chart
 
+export const API_BASE_URL = 'http://localhost:8080/api';
+
 // Gemini Model
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
