@@ -1,33 +1,64 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
+	"sys-sentient/internal/ai"
 	"sys-sentient/internal/collector"
+	"sys-sentient/internal/config"
+	"sys-sentient/internal/pii"
 	"sys-sentient/internal/storage"
 )
 
 func main() {
 	fmt.Println("Starting SysSentient Daemon...")
 
-	// 1. Initialize Storage
-	// Use local db for development
-	store, err := storage.NewStore("./sys-sentient.db")
+	// 1. Load Configuration
+	cfg, err := config.LoadConfig("")
+	if err != nil {
+		log.Printf("Warning: Failed to load config, using defaults: %v", err)
+		cfg, _ = config.LoadConfig("") // re-load defaults effectively
+	}
+	fmt.Printf("Config loaded. Poll interval: %ds\n", cfg.Collector.PollIntervalSeconds)
+
+	// 2. Initialize Storage
+	store, err := storage.NewStore(cfg.Database.Path)
 	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 	defer store.Close()
-	fmt.Println("Storage initialized at ./sys-sentient.db")
+	fmt.Printf("Storage initialized at %s\n", cfg.Database.Path)
 
-	// 2. Initialize Collector
+	// 3. Initialize AI Service (Optional, might fail if no key)
+	ctx := context.Background()
+	aiService, err := ai.NewAIService(ctx, cfg.Gemini)
+	if err != nil {
+		log.Printf("AI Service disabled: %v", err)
+	} else {
+		fmt.Println("AI Service initialized.")
+	}
+
+	// 4. Initialize PII Scrubber
+	scrubber := pii.NewScrubber(cfg.Privacy.MaskIPs, cfg.Privacy.MaskEmails, cfg.Privacy.MaskUsernames)
+
+	// 5. Initialize Collector
 	col := collector.NewCollector()
-	fmt.Println("Collector initialized. Starting polling loop (2s)...")
+	fmt.Println("Collector initialized. Starting polling loop...")
 
-	// 3. Polling Loop
-	ticker := time.NewTicker(2 * time.Second)
+	// 6. Polling Loop
+	interval := time.Duration(cfg.Collector.PollIntervalSeconds) * time.Second
+	if interval == 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	// Analysis Cooldown
+	lastAnalysisTime := time.Time{}
+	analysisCooldown := 5 * time.Minute // Don't analyze more than once every 5 minutes
 
 	for range ticker.C {
 		// Collect
@@ -43,7 +74,7 @@ func main() {
 			continue
 		}
 
-		// Log to console (proof of life and verification)
+		// Log to console
 		fmt.Printf("[%s] CPU: %.2f%% | RAM: %d/%d MB | Procs: %s\n",
 			state.Timestamp.Format(time.TimeOnly),
 			state.CPUUsage,
@@ -51,5 +82,37 @@ func main() {
 			state.MemoryTotal/1024/1024,
 			state.TopProcesses,
 		)
+
+		// Check Triggers for AI Analysis
+		if aiService != nil {
+			// Trigger conditions: High CPU (>80%) or High Memory (>90%)
+			// This is a simple logic.
+			isHighCPU := state.CPUUsage > 80.0
+			isHighMem := float64(state.MemoryUsed)/float64(state.MemoryTotal) > 0.9
+
+			if (isHighCPU || isHighMem) && time.Since(lastAnalysisTime) > analysisCooldown {
+				fmt.Println("⚠️  Threshold Triggered! Requesting AI Analysis...")
+				lastAnalysisTime = time.Now()
+
+				go func() {
+					// Placeholder for log reading
+					rawLogs := "Log reading not yet implemented. (No recent errors in dmesg)"
+					// In real impl, we'd run `dmesg | tail` or similar.
+
+					scrubbedLogs := scrubber.SanitizeLog(rawLogs)
+					
+					insight, err := aiService.AnalyzeSystemState(context.Background(), *state, scrubbedLogs)
+					if err != nil {
+						log.Printf("Error analyzing system state: %v", err)
+						return
+					}
+
+					fmt.Printf("🤖 AI Insight: %s\n", insight)
+					if err := store.SaveInsight(insight); err != nil {
+						log.Printf("Error saving insight: %v", err)
+					}
+				}()
+			}
+		}
 	}
 }

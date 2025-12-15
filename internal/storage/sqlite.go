@@ -27,7 +27,7 @@ func NewStore(dbPath string) (*Store, error) {
 }
 
 func createTable(db *sql.DB) error {
-	query := `
+	queryMetrics := `
 	CREATE TABLE IF NOT EXISTS metrics (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp DATETIME,
@@ -41,7 +41,18 @@ func createTable(db *sql.DB) error {
 		top_processes TEXT
 	);
 	`
-	_, err := db.Exec(query)
+	if _, err := db.Exec(queryMetrics); err != nil {
+		return err
+	}
+
+	queryInsights := `
+	CREATE TABLE IF NOT EXISTS insights (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp DATETIME,
+		content TEXT
+	);
+	`
+	_, err := db.Exec(queryInsights)
 	return err
 }
 
@@ -56,6 +67,12 @@ func (s *Store) Save(m *models.SystemState) error {
 		m.Timestamp, m.CPUUsage, m.MemoryUsed, m.MemoryTotal,
 		m.DiskReadBytes, m.DiskWriteBytes, m.NetSentBytes, m.NetRecvBytes, m.TopProcesses,
 	)
+	return err
+}
+
+func (s *Store) SaveInsight(content string) error {
+	query := `INSERT INTO insights (timestamp, content) VALUES (CURRENT_TIMESTAMP, ?)`
+	_, err := s.db.Exec(query, content)
 	return err
 }
 
@@ -74,6 +91,30 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 			return nil, err
 		}
 		results = append(results, m)
+	}
+	return results, nil
+}
+
+type Insight struct {
+	Timestamp string
+	Content   string
+}
+
+func (s *Store) GetRecentInsights(limit int) ([]Insight, error) {
+	query := `SELECT timestamp, content FROM insights ORDER BY timestamp DESC LIMIT ?`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []Insight
+	for rows.Next() {
+		var i Insight
+		if err := rows.Scan(&i.Timestamp, &i.Content); err != nil {
+			return nil, err
+		}
+		results = append(results, i)
 	}
 	return results, nil
 }
