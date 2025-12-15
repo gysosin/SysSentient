@@ -55,7 +55,7 @@ func main() {
 	scrubber := pii.NewScrubber(cfg.Privacy.MaskIPs, cfg.Privacy.MaskEmails, cfg.Privacy.MaskUsernames)
 
 	// 6. Initialize Collector
-col := collector.NewCollector()
+	col := collector.NewCollector()
 	fmt.Println("Collector initialized. Starting polling loop...")
 
 	// 7. Polling Loop
@@ -66,62 +66,74 @@ col := collector.NewCollector()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Database Maintenance Ticker (Every 1 hour)
+	dbTicker := time.NewTicker(1 * time.Hour)
+	defer dbTicker.Stop()
+
 	// Analysis Cooldown
 	lastAnalysisTime := time.Time{}
 	analysisCooldown := 5 * time.Minute // Don't analyze more than once every 5 minutes
 
-	for range ticker.C {
-		// Collect
-		state, err := col.Collect()
-		if err != nil {
-			log.Printf("Error collecting metrics: %v", err)
-			continue
-		}
+	for {
+		select {
+		case <-dbTicker.C:
+			// Prune metrics older than 24 hours to keep DB lightweight
+			if err := store.PruneOldMetrics(24); err != nil {
+				log.Printf("Error pruning old metrics: %v", err)
+			}
 
-		// Save
-		if err := store.Save(state); err != nil {
-			log.Printf("Error saving metrics: %v", err)
-			continue
-		}
+		case <-ticker.C:
+			// Collect
+			state, err := col.Collect()
+			if err != nil {
+				log.Printf("Error collecting metrics: %v", err)
+				continue
+			}
 
-		// Log to console
-		fmt.Printf("[%s] CPU: %.2f%% | RAM: %d/%d MB | Procs: %s\n",
-			state.Timestamp.Format(time.TimeOnly),
-			state.CPUUsage,
-			state.MemoryUsed/1024/1024,
-			state.MemoryTotal/1024/1024,
-			state.TopProcesses,
-		)
+			// Save
+			if err := store.Save(state); err != nil {
+				log.Printf("Error saving metrics: %v", err)
+				continue
+			}
 
-		// Check Triggers for AI Analysis
-		if aiService != nil {
-			// Trigger conditions: High CPU (>80%) or High Memory (>90%)
-			// This is a simple logic.
-			isHighCPU := state.CPUUsage > 80.0
-			isHighMem := float64(state.MemoryUsed)/float64(state.MemoryTotal) > 0.9
+			// Log to console
+			fmt.Printf("[%s] CPU: %.2f%% | RAM: %d/%d MB | Procs: %s\n",
+				state.Timestamp.Format(time.TimeOnly),
+				state.CPUUsage,
+				state.MemoryUsed/1024/1024,
+				state.MemoryTotal/1024/1024,
+				state.TopProcesses,
+			)
 
-			if (isHighCPU || isHighMem) && time.Since(lastAnalysisTime) > analysisCooldown {
-				fmt.Println("⚠️  Threshold Triggered! Requesting AI Analysis...")
-				lastAnalysisTime = time.Now()
+			// Check Triggers for AI Analysis
+			if aiService != nil {
+				// Trigger conditions: High CPU (>80%) or High Memory (>90%)
+				isHighCPU := state.CPUUsage > 80.0
+				isHighMem := float64(state.MemoryUsed)/float64(state.MemoryTotal) > 0.9
 
-				go func() {
-					// Placeholder for log reading
-					rawLogs := "Log reading not yet implemented. (No recent errors in dmesg)"
-					// In real impl, we'd run `dmesg | tail` or similar.
+				if (isHighCPU || isHighMem) && time.Since(lastAnalysisTime) > analysisCooldown {
+					fmt.Println("⚠️  Threshold Triggered! Requesting AI Analysis...")
+					lastAnalysisTime = time.Now()
 
-					scrubbedLogs := scrubber.SanitizeLog(rawLogs)
-					
-					insight, err := aiService.AnalyzeSystemState(context.Background(), *state, scrubbedLogs)
-					if err != nil {
-						log.Printf("Error analyzing system state: %v", err)
-						return
-					}
+					go func() {
+						// Placeholder for log reading
+						rawLogs := "Log reading not yet implemented. (No recent errors in dmesg)"
+						scrubbedLogs := scrubber.SanitizeLog(rawLogs)
 
-					fmt.Printf("🤖 AI Insight: %s\n", insight)
-					if err := store.SaveInsight(insight); err != nil {
-						log.Printf("Error saving insight: %v", err)
-					}
-				}()
+						insight, err := aiService.AnalyzeSystemState(context.Background(), *state, scrubbedLogs)
+						if err != nil {
+							log.Printf("Error analyzing system state: %v", err)
+							return
+						}
+
+						fmt.Printf("🤖 AI Insight: %s\n", insight)
+						// Save is handled inside AnalyzeSystemState (RAG cache) or externally? 
+						// Wait, RAG cache saves it to cache, but we also want to save to DB for history.
+						if err := store.SaveInsight(insight); err != nil {
+							log.Printf("Error saving insight: %v", err)
+						}
+					}()
+				}
 			}
 		}
 	}

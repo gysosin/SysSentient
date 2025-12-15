@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 
 	"sys-sentient/internal/models"
 
@@ -13,7 +14,8 @@ type Store struct {
 }
 
 func NewStore(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	// Enable WAL mode for concurrency
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
 	if err != nil {
 		return nil, err
 	}
@@ -27,6 +29,7 @@ func NewStore(dbPath string) (*Store, error) {
 }
 
 func createTable(db *sql.DB) error {
+	var err error
 	queryMetrics := `
 	CREATE TABLE IF NOT EXISTS metrics (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +44,12 @@ func createTable(db *sql.DB) error {
 		top_processes TEXT
 	);
 	`
-	if _, err := db.Exec(queryMetrics); err != nil {
+	if _, err = db.Exec(queryMetrics); err != nil {
+		return err
+	}
+
+	// Index for faster time-based queries
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp);`); err != nil {
 		return err
 	}
 
@@ -52,7 +60,7 @@ func createTable(db *sql.DB) error {
 		content TEXT
 	);
 	`
-	_, err := db.Exec(queryInsights)
+	_, err = db.Exec(queryInsights)
 	return err
 }
 
@@ -67,6 +75,14 @@ func (s *Store) Save(m *models.SystemState) error {
 		m.Timestamp, m.CPUUsage, m.MemoryUsed, m.MemoryTotal,
 		m.DiskReadBytes, m.DiskWriteBytes, m.NetSentBytes, m.NetRecvBytes, m.TopProcesses,
 	)
+	return err
+}
+
+func (s *Store) PruneOldMetrics(hours int) error {
+	query := `DELETE FROM metrics WHERE timestamp < datetime('now', ?)`
+	// SQLite modifier: '-24 hours'
+	modifier := fmt.Sprintf("-%d hours", hours)
+	_, err := s.db.Exec(query, modifier)
 	return err
 }
 
