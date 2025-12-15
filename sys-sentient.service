@@ -1,0 +1,15 @@
+[Unit]
+Description=SysSentient Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sys-sentient
+ExecStart=/opt/sys-sentient/sys-daemon
+Restart=always
+# Environment variables can be set here or in /etc/sys-sentient/config.yaml
+Environment=SYS_SENTIENT_DATABASE_PATH=/opt/sys-sentient/sys-sentient.db
+
+[Install]
+WantedBy=multi-user.target

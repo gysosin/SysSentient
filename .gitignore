@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Binaries and DB
+sys-daemon
+*.db
+sys-sentient
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

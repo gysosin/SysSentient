@@ -31,6 +31,12 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /api/insights", s.handleInsights)
 	mux.HandleFunc("POST /api/analyze", s.handleAnalyze)
 
+	// Serve Static Files
+	// Check if directory exists or just serve.
+	// For Single Page App, might need to serve index.html on 404, but strict file server is okay for now.
+	fs := http.FileServer(http.Dir("./web/dist"))
+	mux.Handle("/", fs)
+
 	handler := s.enableCORS(mux)
 
 	addr := fmt.Sprintf(":%d", s.config.Port)

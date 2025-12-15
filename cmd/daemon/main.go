@@ -24,6 +24,7 @@ func main() {
 		cfg, _ = config.LoadConfig("") // re-load defaults effectively
 	}
 	fmt.Printf("Config loaded. Poll interval: %ds\n", cfg.Collector.PollIntervalSeconds)
+	fmt.Printf("Server Port: %d\n", cfg.Server.Port)
 
 	// 2. Initialize Storage
 	store, err := storage.NewStore(cfg.Database.Path)
