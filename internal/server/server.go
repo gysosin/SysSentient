@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sys-sentient/internal/ai"
@@ -20,6 +22,7 @@ type Server struct {
 	logReader      *logs.LogReader
 	scrubber       *pii.Scrubber
 	authMiddleware *AuthMiddleware
+	httpServer     *http.Server
 }
 
 func NewServer(cfg config.ServerConfig, store *storage.Store, aiService *ai.AIService) *Server {
@@ -77,7 +80,11 @@ func (s *Server) Start() error {
 		fmt.Println("⚠️  WARNING: No API key configured. Server is running without authentication!")
 	}
 	fmt.Printf("WebSocket endpoint: ws://localhost%s/ws/metrics\n", addr)
-	return newHTTPServer(addr, handler).ListenAndServe()
+	s.httpServer = newHTTPServer(addr, handler)
+	if err := s.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 func newHTTPServer(addr string, handler http.Handler) *http.Server {
@@ -95,6 +102,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"healthy","service":"sys-sentient"}`))
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.httpServer == nil {
+		return nil
+	}
+	return s.httpServer.Shutdown(ctx)
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
