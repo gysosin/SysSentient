@@ -54,6 +54,7 @@ export function useWebSocket(): UseWebSocketReturn {
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
     const lastCountersRef = useRef<RawCounters | null>(null);
+    const shouldReconnectRef = useRef(true);
 
     const parseMetrics = useCallback((payload: RawMetricsPayload): SystemMetrics => {
         const t1 = new Date(payload.timestamp).getTime();
@@ -105,6 +106,7 @@ export function useWebSocket(): UseWebSocketReturn {
 
     const connect = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) return;
+        shouldReconnectRef.current = true;
 
         try {
             const ws = new WebSocket(metricsWebSocketURL());
@@ -133,6 +135,9 @@ export function useWebSocket(): UseWebSocketReturn {
 
             ws.onclose = () => {
                 setConnected(false);
+                if (!shouldReconnectRef.current) {
+                    return;
+                }
 
                 // Exponential backoff reconnect
                 const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
@@ -152,6 +157,7 @@ export function useWebSocket(): UseWebSocketReturn {
     }, [parseMetrics]);
 
     const reconnect = useCallback(() => {
+        shouldReconnectRef.current = true;
         if (wsRef.current) {
             wsRef.current.close();
         }
@@ -163,6 +169,7 @@ export function useWebSocket(): UseWebSocketReturn {
         connect();
 
         return () => {
+            shouldReconnectRef.current = false;
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
             }
