@@ -37,9 +37,11 @@ const App: React.FC = () => {
   // Fallback polling when WebSocket is not connected
   useEffect(() => {
     if (connected) return; // Skip polling if WebSocket is active
+    let cancelled = false;
 
     const fetchData = async () => {
       const { metrics, processes: procs } = await fetchMetricsHistory();
+      if (cancelled) return;
       if (metrics.length > 0) {
         setMetricsHistory(metrics);
       }
@@ -55,13 +57,19 @@ const App: React.FC = () => {
 
     fetchData();
     const intervalId = setInterval(fetchData, REFRESH_RATE_MS);
-    return () => clearInterval(intervalId);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, [connected]);
 
   // Poll recent system logs at a slower cadence than metrics collection.
   useEffect(() => {
+    let cancelled = false;
+
     const fetchLogs = async () => {
       const recentLogs = await fetchRecentLogs();
+      if (cancelled) return;
       if (recentLogs.length > 0) {
         setLogs(recentLogs);
       }
@@ -69,7 +77,10 @@ const App: React.FC = () => {
 
     fetchLogs();
     const intervalId = setInterval(fetchLogs, LOG_REFRESH_RATE_MS);
-    return () => clearInterval(intervalId);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, []);
 
   // Uptime counter
