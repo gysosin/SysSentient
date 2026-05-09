@@ -131,7 +131,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loadin
                <h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest border-b border-gray-800 pb-1">
                  Diagnostics_Output
                </h4>
-               <p className="text-gray-300 text-sm leading-relaxed font-mono">
+               <p className="text-gray-300 text-sm leading-relaxed font-mono whitespace-pre-wrap break-words">
                  {analysis.detailedAnalysis}
                  <span className="inline-block w-2 h-4 bg-neon-purple ml-1 animate-pulse align-middle"></span>
                </p>
@@ -161,7 +161,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loadin
                              {copyErrorActionId === action.id ? 'Copy failed' : copiedActionId === action.id ? 'Copied' : 'Copy'}
                            </button>
                         </div>
-                        <div className="bg-black p-2 font-mono text-sm text-neon-blue mb-2 border-l-2 border-gray-700 group-hover:border-neon-blue transition-colors">
+                        <div className="bg-black p-2 font-mono text-sm text-neon-blue mb-2 border-l-2 border-gray-700 group-hover:border-neon-blue transition-colors whitespace-pre-wrap break-all">
                           $ {action.command}
                         </div>
                         <p className="text-gray-500 text-xs">{action.description}</p>
