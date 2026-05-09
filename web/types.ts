@@ -10,12 +10,19 @@ export interface Process {
 export interface SystemMetrics {
   timestamp: number;
   cpuLoad: number;
+  cpuPerCore: number[];
   memoryUsed: number; // in MB
   memoryTotal: number; // in MB
+  swapUsed: number; // in MB
+  swapTotal: number; // in MB
   diskRead: number; // MB/s
   diskWrite: number; // MB/s
+  diskIOPS: number;
   networkRx: number; // KB/s
   networkTx: number; // KB/s
+  loadAvg1: number;
+  loadAvg5: number;
+  loadAvg15: number;
   temperature: number; // Celsius
 }
 

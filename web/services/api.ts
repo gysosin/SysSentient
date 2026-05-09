@@ -1,12 +1,14 @@
 import { SystemMetrics, AIAnalysisResult, Process } from '../types';
-import { API_BASE_URL } from '../constants';
+import { API_BASE_URL, authHeaders } from '../constants';
 
-export const fetchMetricsHistory = async (): Promise<{metrics: SystemMetrics[], processes: Process[]}> => {
+export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/metrics`);
+        const response = await fetch(`${API_BASE_URL}/metrics`, {
+            headers: authHeaders(),
+        });
         if (!response.ok) throw new Error('Failed to fetch metrics');
         const rawData = await response.json(); // Array of models.SystemState
-        
+
         // rawData is ordered DESC (newest first).
         const sorted = rawData.reverse(); // Now Oldest -> Newest
 
@@ -15,8 +17,8 @@ export const fetchMetricsHistory = async (): Promise<{metrics: SystemMetrics[], 
 
         for (let i = 0; i < sorted.length; i++) {
             const curr = sorted[i];
-            const prev = i > 0 ? sorted[i-1] : null;
-            
+            const prev = i > 0 ? sorted[i - 1] : null;
+
             let diskReadRate = 0;
             let diskWriteRate = 0;
             let netRxRate = 0;
@@ -27,7 +29,7 @@ export const fetchMetricsHistory = async (): Promise<{metrics: SystemMetrics[], 
             if (prev) {
                 const t0 = new Date(prev.timestamp).getTime();
                 const dt = (t1 - t0) / 1000;
-                
+
                 if (dt > 0) {
                     diskReadRate = (curr.disk_read_bytes - prev.disk_read_bytes) / dt;
                     diskWriteRate = (curr.disk_write_bytes - prev.disk_write_bytes) / dt;
@@ -39,13 +41,20 @@ export const fetchMetricsHistory = async (): Promise<{metrics: SystemMetrics[], 
             metrics.push({
                 timestamp: t1,
                 cpuLoad: curr.cpu_usage || 0,
+                cpuPerCore: curr.cpu_per_core || [],
                 memoryUsed: (curr.memory_used || 0) / 1024 / 1024,
                 memoryTotal: (curr.memory_total || 1) / 1024 / 1024,
-                temperature: 0, 
+                swapUsed: (curr.swap_used || 0) / 1024 / 1024,
+                swapTotal: (curr.swap_total || 0) / 1024 / 1024,
+                temperature: curr.temperature || 0,
                 diskRead: Math.max(0, diskReadRate / 1024 / 1024), // MB/s
                 diskWrite: Math.max(0, diskWriteRate / 1024 / 1024),
+                diskIOPS: curr.disk_iops || 0,
                 networkRx: Math.max(0, netRxRate / 1024), // KB/s
-                networkTx: Math.max(0, netTxRate / 1024)
+                networkTx: Math.max(0, netTxRate / 1024),
+                loadAvg1: curr.load_avg_1 || 0,
+                loadAvg5: curr.load_avg_5 || 0,
+                loadAvg15: curr.load_avg_15 || 0,
             });
 
             // Parse processes from the latest entry
@@ -53,7 +62,7 @@ export const fetchMetricsHistory = async (): Promise<{metrics: SystemMetrics[], 
                 latestProcesses = parseProcesses(curr.top_processes);
             }
         }
-        
+
         return { metrics, processes: latestProcesses };
 
     } catch (e) {
@@ -64,15 +73,19 @@ export const fetchMetricsHistory = async (): Promise<{metrics: SystemMetrics[], 
 
 export const triggerAnalysis = async (): Promise<AIAnalysisResult | null> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/analyze`, { method: 'POST' });
+        const response = await fetch(`${API_BASE_URL}/analyze`, {
+            method: 'POST',
+            headers: authHeaders(),
+        });
         if (!response.ok) throw new Error('Failed to analyze');
         const data = await response.json();
-        
+
+        // Data should be the AIAnalysis object
         return {
-            status: 'Warning', // Default
-            summary: "AI Analysis Generated",
-            detailedAnalysis: data.insight || "No details provided",
-            recommendedActions: []
+            status: data.status || 'Warning',
+            summary: data.summary || "AI Analysis Generated",
+            detailedAnalysis: data.detailedAnalysis || "No details provided",
+            recommendedActions: data.recommendedActions || []
         };
     } catch (e) {
         console.error("API Error triggerAnalysis", e);
@@ -81,18 +94,32 @@ export const triggerAnalysis = async (): Promise<AIAnalysisResult | null> => {
 }
 
 export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => {
-     try {
-        const response = await fetch(`${API_BASE_URL}/insights`);
+    try {
+        const response = await fetch(`${API_BASE_URL}/insights`, {
+            headers: authHeaders(),
+        });
         if (!response.ok) throw new Error('Failed to fetch insights');
         const data = await response.json(); // Array of {timestamp, content}
-        
+
         if (data && data.length > 0) {
-            return {
-                status: 'Healthy', // Placeholder
-                summary: "Recent Insight",
-                detailedAnalysis: data[0].content,
-                recommendedActions: []
-            };
+            // Content is a JSON string now
+            try {
+                const parsed = JSON.parse(data[0].content);
+                return {
+                    status: parsed.status || 'Healthy',
+                    summary: parsed.summary || "Recent Insight",
+                    detailedAnalysis: parsed.detailedAnalysis,
+                    recommendedActions: parsed.recommendedActions || []
+                };
+            } catch (parseErr) {
+                // Fallback for old insights that were plain text
+                return {
+                    status: 'Healthy',
+                    summary: "Legacy Insight",
+                    detailedAnalysis: data[0].content,
+                    recommendedActions: []
+                };
+            }
         }
         return null;
     } catch (e) {
@@ -105,7 +132,7 @@ function parseProcesses(procStr: string): Process[] {
     // Format: "name (cpu%), name (cpu%)"
     // Example: "chrome (12.5%), code (5.0%)"
     if (!procStr || procStr === "None") return [];
-    
+
     return procStr.split(', ').map((p, idx) => {
         const parts = p.match(/(.+) \(([\d.]+)%\)/);
         if (parts) {
@@ -119,7 +146,7 @@ function parseProcesses(procStr: string): Process[] {
             };
         }
         return {
-             pid: 0, name: p, user: '?', cpu: 0, memory: 0, state: 'Running'
+            pid: 0, name: p, user: '?', cpu: 0, memory: 0, state: 'Running'
         };
     });
 }

@@ -2,10 +2,25 @@ export const APP_NAME = "SysSentient";
 export const REFRESH_RATE_MS = 2000; // 2 seconds
 export const HISTORY_LENGTH = 30; // 60 seconds of history on chart
 
-export const API_BASE_URL = 'http://localhost:8080/api';
+export const API_BASE_URL = import.meta.env.VITE_SYS_SENTIENT_API_URL || 'http://localhost:8080/api';
+export const WS_BASE_URL = import.meta.env.VITE_SYS_SENTIENT_WS_URL || 'ws://localhost:8080/ws/metrics';
+export const API_KEY = import.meta.env.VITE_SYS_SENTIENT_API_KEY || '';
+
+export const authHeaders = (): HeadersInit => {
+  if (!API_KEY) return {};
+  return { 'X-API-Key': API_KEY };
+};
+
+export const metricsWebSocketURL = (): string => {
+  if (!API_KEY) return WS_BASE_URL;
+
+  const url = new URL(WS_BASE_URL);
+  url.searchParams.set('api_key', API_KEY);
+  return url.toString();
+};
 
 // Gemini Model
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
 // PII Scrubbing Patterns
 export const PII_PATTERNS = {

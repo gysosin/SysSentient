@@ -8,7 +8,7 @@ interface AIInsightPanelProps {
 }
 
 const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRefresh }) => {
-  
+
   const getStatusColor = (status?: string) => {
     switch(status) {
       case 'Healthy': return 'border-neon-green text-neon-green shadow-[0_0_10px_rgba(10,255,0,0.2)]';
@@ -22,20 +22,20 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
     <div className="bg-gray-900/90 backdrop-blur border border-gray-700 h-full flex flex-col relative overflow-hidden group">
       {/* Decorative scan line */}
       <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-neon-purple to-transparent opacity-50"></div>
-      
+
       {/* Header */}
       <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-black/20">
         <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${loading ? 'bg-neon-purple animate-ping' : 'bg-neon-purple'}`}></div>
             <h2 className="text-neon-purple font-bold text-sm tracking-widest uppercase">AI_Core_Analysis</h2>
         </div>
-        <button 
+        <button
           onClick={onRefresh}
           disabled={loading}
           className={`
             relative px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all border
-            ${loading 
-              ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' 
+            ${loading
+              ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
               : 'bg-neon-purple/10 border-neon-purple text-neon-purple hover:bg-neon-purple hover:text-white hover:shadow-[0_0_15px_#bc13fe]'}
           `}
         >
@@ -45,7 +45,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
 
       <div className="p-5 flex-grow overflow-y-auto relative">
         {/* Background Grid inside panel */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none" 
+        <div className="absolute inset-0 opacity-5 pointer-events-none"
              style={{backgroundImage: 'radial-gradient(#bc13fe 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
         </div>
 
@@ -70,13 +70,22 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
                 <div className="h-full bg-neon-purple animate-[scan_1.5s_ease-in-out_infinite] w-1/2"></div>
               </div>
             </div>
-            
-            <div className="font-mono text-[10px] text-gray-500 space-y-1">
-               <p className="animate-pulse">> Reading /proc/meminfo...</p>
-               <p className="animate-pulse delay-75">> Parsing kernel ring buffer...</p>
-               <p className="animate-pulse delay-150">> Connecting to Neural Net...</p>
-            </div>
-          </div>
+
+
+
+                         <div className="font-mono text-[10px] text-gray-500 space-y-1">
+
+                            <p className="animate-pulse">&gt; Reading /proc/meminfo...</p>
+
+                            <p className="animate-pulse delay-75">&gt; Parsing kernel ring buffer...</p>
+
+                            <p className="animate-pulse delay-150">&gt; Connecting to Neural Net...</p>
+
+                         </div>
+
+                       </div>
+
+
         )}
 
         {analysis && !loading && (
@@ -110,7 +119,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
                 {analysis.recommendedActions.map((action, idx) => (
                     <div key={action.id} style={{animationDelay: `${idx * 100}ms`}} className="group animate-[fadeIn_0.5s_ease-out_forwards] opacity-0">
                       <div className={`
-                        border border-gray-700 bg-gray-900/50 p-3 
+                        border border-gray-700 bg-gray-900/50 p-3
                         hover:border-${action.isSafe ? 'neon-green' : 'neon-red'} transition-colors duration-300
                       `}>
                         <div className="flex justify-between items-start mb-2">
