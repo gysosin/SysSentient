@@ -23,6 +23,7 @@ const App: React.FC = () => {
   // AI State
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -86,11 +87,15 @@ const App: React.FC = () => {
 
   const handleRunDiagnostics = async () => {
     setIsAiLoading(true);
-    const result = await triggerAnalysis();
-    if (result) {
+    setAiError(null);
+    try {
+      const result = await triggerAnalysis();
       setAiResult(result);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'AI analysis failed');
+    } finally {
+      setIsAiLoading(false);
     }
-    setIsAiLoading(false);
   };
 
   const currentMetric = metricsHistory.length > 0 ? metricsHistory[metricsHistory.length - 1] : {
@@ -223,6 +228,7 @@ const App: React.FC = () => {
           <div className="h-2/5 min-h-[350px]">
             <AIInsightPanel
               analysis={aiResult}
+              error={aiError}
               loading={isAiLoading}
               onRefresh={handleRunDiagnostics}
             />

@@ -3,11 +3,12 @@ import { AIAnalysisResult } from '../types';
 
 interface AIInsightPanelProps {
   analysis: AIAnalysisResult | null;
+  error: string | null;
   loading: boolean;
   onRefresh: () => void;
 }
 
-const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRefresh }) => {
+const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loading, onRefresh }) => {
   const analysisId = React.useMemo(() => {
     if (!analysis) return '';
     return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -53,13 +54,20 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
              style={{backgroundImage: 'radial-gradient(#bc13fe 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
         </div>
 
-        {!analysis && !loading && (
+        {!analysis && !loading && !error && (
           <div className="h-full flex flex-col items-center justify-center text-gray-600 space-y-4">
              <div className="w-16 h-16 border border-gray-700 rounded-full flex items-center justify-center relative">
                 <div className="w-12 h-12 border border-gray-800 rounded-full animate-pulse"></div>
                 <div className="absolute inset-0 border-t border-gray-600 rounded-full animate-spin duration-[3s]"></div>
              </div>
             <p className="font-mono text-xs uppercase tracking-widest">System_Standby // Awaiting Input</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="relative z-10 mb-4 border border-neon-red/70 bg-neon-red/10 p-3 text-neon-red">
+            <div className="text-[10px] uppercase tracking-widest opacity-80">Scan_Failed</div>
+            <p className="mt-1 text-xs font-mono text-red-200">{error}</p>
           </div>
         )}
 

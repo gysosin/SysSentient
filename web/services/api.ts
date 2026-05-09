@@ -6,6 +6,10 @@ interface LogsResponse {
     content?: string;
 }
 
+interface ErrorResponse {
+    error?: string;
+}
+
 interface RawProcess {
     pid?: number;
     name?: string;
@@ -117,26 +121,24 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
     }
 }
 
-export const triggerAnalysis = async (): Promise<AIAnalysisResult | null> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/analyze`, {
-            method: 'POST',
-            headers: authHeaders(),
-        });
-        if (!response.ok) throw new Error('Failed to analyze');
-        const data = await response.json() as Partial<AIAnalysisResult>;
-
-        // Data should be the AIAnalysis object
-        return {
-            status: data.status || 'Warning',
-            summary: data.summary || "AI Analysis Generated",
-            detailedAnalysis: data.detailedAnalysis || "No details provided",
-            recommendedActions: data.recommendedActions || []
-        };
-    } catch (e) {
-        console.error("API Error triggerAnalysis", e);
-        return null;
+export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
+    const response = await fetch(`${API_BASE_URL}/analyze`, {
+        method: 'POST',
+        headers: authHeaders(),
+    });
+    if (!response.ok) {
+        throw new Error(await readAPIError(response, 'Failed to analyze'));
     }
+
+    const data = await response.json() as Partial<AIAnalysisResult>;
+
+    // Data should be the AIAnalysis object
+    return {
+        status: data.status || 'Warning',
+        summary: data.summary || "AI Analysis Generated",
+        detailedAnalysis: data.detailedAnalysis || "No details provided",
+        recommendedActions: data.recommendedActions || []
+    };
 }
 
 export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => {
@@ -198,6 +200,15 @@ function normalizeProcess(process: RawProcess): Process {
         memory: Number(process.memory) || 0,
         state: normalizeProcessState(process.state)
     };
+}
+
+async function readAPIError(response: Response, fallback: string): Promise<string> {
+    try {
+        const payload = await response.json() as ErrorResponse;
+        return payload.error || fallback;
+    } catch {
+        return fallback;
+    }
 }
 
 function normalizeProcessState(state: unknown): Process['state'] {
