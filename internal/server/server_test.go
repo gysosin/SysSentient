@@ -162,6 +162,9 @@ func TestHandleLogsReturnsScrubbedContent(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("expected logs response to disable caching, got %q", rec.Header().Get("Cache-Control"))
+	}
 
 	var payload map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {

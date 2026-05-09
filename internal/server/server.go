@@ -141,7 +141,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	setProtectedJSONHeaders(w)
 	json.NewEncoder(w).Encode(metrics)
 }
 
@@ -151,7 +151,7 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed to load insights")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	setProtectedJSONHeaders(w)
 	json.NewEncoder(w).Encode(insights)
 }
 
@@ -167,7 +167,7 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	setProtectedJSONHeaders(w)
 	json.NewEncoder(w).Encode(map[string]string{
 		"collectedAt": time.Now().UTC().Format(time.RFC3339),
 		"content":     s.scrubber.SanitizeLog(rawLogs),
@@ -209,7 +209,7 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Error saving insight: %v\n", err)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	setProtectedJSONHeaders(w)
 	if err := writeInsightResponse(w, insight); err != nil {
 		fmt.Printf("Error writing insight response: %v\n", err)
 	}
@@ -271,7 +271,13 @@ func writeInsightResponse(w http.ResponseWriter, insight string) error {
 }
 
 func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
-	w.Header().Set("Content-Type", "application/json")
+	setProtectedJSONHeaders(w)
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+func setProtectedJSONHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 }
