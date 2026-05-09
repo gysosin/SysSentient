@@ -89,11 +89,13 @@ server-side.
 ### Run All Tests
 ```bash
 GOTOOLCHAIN=auto go test ./... -v
+cd web && npm test
 ```
 
 ### Check Build
 ```bash
 GOTOOLCHAIN=auto go build ./cmd/daemon
+cd web && npm run typecheck && npm run build
 ```
 
 ### Security Checks

@@ -29,5 +29,7 @@ the Go daemon environment.
 
 ```bash
 npm audit --audit-level=moderate
+npm test
+npm run typecheck
 npm run build
 ```

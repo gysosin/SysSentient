@@ -17,6 +17,7 @@ SysSentient is a single-node system monitor with a Go daemon and a React/Vite da
 - `cd web && npm install`: install frontend dependencies.
 - `cd web && npm run dev`: run the Vite dev server on port `3000`.
 - `cd web && npm audit --audit-level=moderate`: check frontend dependency advisories.
+- `cd web && npm test`: run frontend unit tests with Node's test runner.
 - `cd web && npm run typecheck`: run strict TypeScript checks.
 - `cd web && npm run build`: build dashboard assets into `web/dist/`.
 - `GOTOOLCHAIN=auto go build -o sys-daemon ./cmd/daemon`: build the daemon binary with the Go version from `go.mod`.
@@ -34,7 +35,7 @@ Frontend code uses TypeScript/React function components, ESM imports, and two-sp
 
 ## Testing Guidelines
 
-Add Go tests next to changed packages using `TestName` functions in `*_test.go`. Prefer focused tests for config validation, storage behavior, auth, PII scrubbing, RAG cache behavior, and error paths. Run `GOTOOLCHAIN=auto go test ./... -v` before backend submissions. For frontend changes, run `npm audit --audit-level=moderate`, `npm run typecheck`, and `npm run build`.
+Add Go tests next to changed packages using `TestName` functions in `*_test.go`. Prefer focused tests for config validation, storage behavior, auth, PII scrubbing, RAG cache behavior, and error paths. Run `GOTOOLCHAIN=auto go test ./... -v` before backend submissions. For frontend changes, add `*.test.tsx` or `*.test.ts` coverage where practical and run `npm test`, `npm audit --audit-level=moderate`, `npm run typecheck`, and `npm run build`.
 
 ## Commit & Pull Request Guidelines
 
