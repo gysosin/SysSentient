@@ -108,3 +108,29 @@ func TestGetLogsWithTimeoutBoundsSlowSources(t *testing.T) {
 		t.Fatalf("Expected empty fallback message, got %q", logs)
 	}
 }
+
+func TestGetLogsContextWithTimeoutUsesParentContext(t *testing.T) {
+	reader := NewLogReader(10)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	called := false
+	reader.runCommand = func(ctx context.Context, _ string, _ ...string) ([]byte, error) {
+		called = true
+		if ctx.Err() == nil {
+			t.Fatal("expected command context to inherit parent cancellation")
+		}
+		return nil, ctx.Err()
+	}
+
+	logs, err := reader.GetLogsContextWithTimeout(ctx, time.Second)
+	if err != nil {
+		t.Fatalf("expected best-effort log collection, got error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected log reader to attempt collection")
+	}
+	if !strings.Contains(logs, "No recent errors") {
+		t.Fatalf("expected empty fallback message, got %q", logs)
+	}
+}

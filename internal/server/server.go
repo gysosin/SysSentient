@@ -27,6 +27,7 @@ type Server struct {
 
 type logCollector interface {
 	GetLogsWithTimeout(time.Duration) (string, error)
+	GetLogsContextWithTimeout(context.Context, time.Duration) (string, error)
 }
 
 func NewServer(cfg config.ServerConfig, store *storage.Store, aiService *ai.AIService) *Server {
@@ -159,7 +160,7 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawLogs, err := s.logReader.GetLogsWithTimeout(3 * time.Second)
+	rawLogs, err := s.logReader.GetLogsContextWithTimeout(r.Context(), 3*time.Second)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to collect logs")
 		return
@@ -188,7 +189,7 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger analysis
 	// Collect real logs
-	rawLogs, err := s.logReader.GetLogsWithTimeout(5 * time.Second)
+	rawLogs, err := s.logReader.GetLogsContextWithTimeout(r.Context(), 5*time.Second)
 	if err != nil {
 		rawLogs = "Failed to collect logs for manual analysis."
 	}

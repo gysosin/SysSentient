@@ -175,7 +175,12 @@ func (r *LogReader) getTailLines(input string, n int) string {
 
 // GetLogsWithTimeout collects logs with a timeout to prevent hanging
 func (r *LogReader) GetLogsWithTimeout(timeout time.Duration) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return r.GetLogsContextWithTimeout(context.Background(), timeout)
+}
+
+// GetLogsContextWithTimeout collects logs with a timeout derived from a parent context.
+func (r *LogReader) GetLogsContextWithTimeout(ctx context.Context, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return r.GetRecentLogsContext(ctx)
 }

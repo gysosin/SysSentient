@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,6 +20,10 @@ type fakeLogCollector struct {
 }
 
 func (f fakeLogCollector) GetLogsWithTimeout(time.Duration) (string, error) {
+	return f.content, f.err
+}
+
+func (f fakeLogCollector) GetLogsContextWithTimeout(context.Context, time.Duration) (string, error) {
 	return f.content, f.err
 }
 
