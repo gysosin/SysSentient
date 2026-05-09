@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"sys-sentient/internal/models"
 
@@ -93,17 +92,46 @@ func migrateSchema(db *sql.DB) error {
 	}
 
 	for _, col := range newColumns {
-		// SQLite doesn't have IF NOT EXISTS for ALTER TABLE, so we check first
-		query := fmt.Sprintf("ALTER TABLE metrics ADD COLUMN %s %s", col.name, col.columnType)
-		_, err := db.Exec(query)
+		exists, err := metricsColumnExists(db, col.name)
 		if err != nil {
-			// Ignore "duplicate column" error
-			if !strings.Contains(err.Error(), fmt.Sprintf("duplicate column name: %s", col.name)) {
-				return fmt.Errorf("failed to add metrics.%s: %w", col.name, err)
-			}
+			return fmt.Errorf("failed to inspect metrics.%s: %w", col.name, err)
+		}
+		if exists {
+			continue
+		}
+
+		query := fmt.Sprintf("ALTER TABLE metrics ADD COLUMN %s %s", col.name, col.columnType)
+		if _, err := db.Exec(query); err != nil {
+			return fmt.Errorf("failed to add metrics.%s: %w", col.name, err)
 		}
 	}
 	return nil
+}
+
+func metricsColumnExists(db *sql.DB, columnName string) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(metrics)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid          int
+			name         string
+			columnType   string
+			notNull      int
+			defaultValue sql.NullString
+			primaryKey   int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, err
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func (s *Store) Save(m *models.SystemState) error {

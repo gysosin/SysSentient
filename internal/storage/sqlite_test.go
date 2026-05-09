@@ -192,6 +192,23 @@ func TestNewStoreMigratesExistingMetricsTable(t *testing.T) {
 	}
 }
 
+func TestMigrateSchemaIsIdempotent(t *testing.T) {
+	dbPath := "test_migrate_idempotent.db"
+	defer os.Remove(dbPath)
+	defer os.Remove(dbPath + "-shm")
+	defer os.Remove(dbPath + "-wal")
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := migrateSchema(store.db); err != nil {
+		t.Fatalf("Expected repeated migration to succeed: %v", err)
+	}
+}
+
 func TestPruneOldMetrics(t *testing.T) {
 	dbPath := "test_prune.db"
 	defer os.Remove(dbPath)
