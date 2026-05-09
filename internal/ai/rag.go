@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+const (
+	ragCacheTTL        = 24 * time.Hour
+	maxRAGCacheEntries = 128
+)
+
 // Simple in-memory vector store for deduplication
 // In a real production system, this would be a persistent vector DB.
 type RAGStore struct {
@@ -49,8 +54,7 @@ func (r *RAGStore) GetCachedInsight(logs string) (string, bool) {
 		return "", false
 	}
 
-	// Cache validity: 24 hours
-	if time.Since(entry.Timestamp) > 24*time.Hour {
+	if time.Since(entry.Timestamp) > ragCacheTTL {
 		return "", false
 	}
 
@@ -63,9 +67,37 @@ func (r *RAGStore) SaveInsight(logs, insight string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	now := time.Now()
+	r.pruneExpiredLocked(now)
+	if _, exists := r.cache[sig]; !exists && len(r.cache) >= maxRAGCacheEntries {
+		r.evictOldestLocked()
+	}
+
 	r.cache[sig] = CachedInsight{
 		Insight:   insight,
-		Timestamp: time.Now(),
+		Timestamp: now,
+	}
+}
+
+func (r *RAGStore) pruneExpiredLocked(now time.Time) {
+	for sig, entry := range r.cache {
+		if now.Sub(entry.Timestamp) > ragCacheTTL {
+			delete(r.cache, sig)
+		}
+	}
+}
+
+func (r *RAGStore) evictOldestLocked() {
+	var oldestSig string
+	var oldestTime time.Time
+	for sig, entry := range r.cache {
+		if oldestSig == "" || entry.Timestamp.Before(oldestTime) {
+			oldestSig = sig
+			oldestTime = entry.Timestamp
+		}
+	}
+	if oldestSig != "" {
+		delete(r.cache, oldestSig)
 	}
 }
 

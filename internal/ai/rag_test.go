@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -66,12 +67,47 @@ func TestRAGStore_Expiry(t *testing.T) {
 	// Manually expire
 	store.mu.Lock()
 	entry := store.cache[GenerateLogSignature(logs)]
-	entry.Timestamp = time.Now().Add(-25 * time.Hour)
+	entry.Timestamp = time.Now().Add(-ragCacheTTL - time.Hour)
 	store.cache[GenerateLogSignature(logs)] = entry
 	store.mu.Unlock()
 
 	_, found := store.GetCachedInsight(logs)
 	if found {
 		t.Error("Should not return expired insight")
+	}
+}
+
+func TestRAGStorePrunesExpiredEntriesOnSave(t *testing.T) {
+	store := NewRAGStore()
+	store.SaveInsight("expired", "old")
+
+	store.mu.Lock()
+	entry := store.cache[GenerateLogSignature("expired")]
+	entry.Timestamp = time.Now().Add(-ragCacheTTL - time.Hour)
+	store.cache[GenerateLogSignature("expired")] = entry
+	store.mu.Unlock()
+
+	store.SaveInsight("fresh", "new")
+
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	if _, found := store.cache[GenerateLogSignature("expired")]; found {
+		t.Fatal("expected expired cache entry to be pruned")
+	}
+	if _, found := store.cache[GenerateLogSignature("fresh")]; !found {
+		t.Fatal("expected fresh cache entry to remain")
+	}
+}
+
+func TestRAGStoreCapsCacheSize(t *testing.T) {
+	store := NewRAGStore()
+	for i := 0; i < maxRAGCacheEntries+10; i++ {
+		store.SaveInsight(fmt.Sprintf("logs-%d", i), "insight")
+	}
+
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	if len(store.cache) > maxRAGCacheEntries {
+		t.Fatalf("expected cache size <= %d, got %d", maxRAGCacheEntries, len(store.cache))
 	}
 }
