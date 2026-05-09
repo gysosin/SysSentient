@@ -55,6 +55,9 @@ Access the dashboard at `http://localhost:8080`.
 If API authentication is enabled, build the web UI with
 `VITE_SYS_SENTIENT_API_KEY` set to the same dashboard key.
 
+By default, the daemon keeps 24 hours of metrics and 7 days of AI insight
+history to keep the local SQLite database bounded.
+
 ## Configuration
 
 Configuration can be set via `config.yaml` or Environment Variables.
