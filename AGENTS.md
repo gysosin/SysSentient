@@ -22,6 +22,7 @@ SysSentient is a single-node system monitor with a Go daemon and a React/Vite da
 - `cd web && npm run build`: build dashboard assets into `web/dist/`.
 - `GOTOOLCHAIN=auto go build -o sys-daemon ./cmd/daemon`: build the daemon binary with the Go version from `go.mod`.
 - `./sys-daemon`: run the API server and dashboard at `http://localhost:8080`.
+- `GOTOOLCHAIN=auto go vet ./...`: run backend static analysis.
 - `GOTOOLCHAIN=auto go test ./... -v`: run all backend tests.
 - `GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@latest ./...`: scan called Go code for known vulnerabilities.
 
@@ -35,7 +36,7 @@ Frontend code uses TypeScript/React function components, ESM imports, and two-sp
 
 ## Testing Guidelines
 
-Add Go tests next to changed packages using `TestName` functions in `*_test.go`. Prefer focused tests for config validation, storage behavior, auth, PII scrubbing, RAG cache behavior, and error paths. Run `GOTOOLCHAIN=auto go test ./... -v` before backend submissions. For frontend changes, add `*.test.tsx` or `*.test.ts` coverage where practical and run `npm test`, `npm audit --audit-level=moderate`, `npm run typecheck`, and `npm run build`.
+Add Go tests next to changed packages using `TestName` functions in `*_test.go`. Prefer focused tests for config validation, storage behavior, auth, PII scrubbing, RAG cache behavior, and error paths. Run `GOTOOLCHAIN=auto go vet ./...` and `GOTOOLCHAIN=auto go test ./... -v` before backend submissions. For frontend changes, add `*.test.tsx` or `*.test.ts` coverage where practical and run `npm test`, `npm audit --audit-level=moderate`, `npm run typecheck`, and `npm run build`.
 
 ## Commit & Pull Request Guidelines
 

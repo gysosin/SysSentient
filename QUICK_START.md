@@ -88,6 +88,7 @@ server-side.
 
 ### Run All Tests
 ```bash
+GOTOOLCHAIN=auto go vet ./...
 GOTOOLCHAIN=auto go test ./... -v
 cd web && npm test
 ```
