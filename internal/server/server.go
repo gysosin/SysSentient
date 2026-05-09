@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sys-sentient/internal/ai"
 	"sys-sentient/internal/config"
@@ -175,6 +176,10 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
+	if rejectUnexpectedRequestBody(w, r) {
+		return
+	}
+
 	if s.aiService == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "AI service not initialized")
 		return
@@ -213,6 +218,19 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	if err := writeInsightResponse(w, insight); err != nil {
 		fmt.Printf("Error writing insight response: %v\n", err)
 	}
+}
+
+func rejectUnexpectedRequestBody(w http.ResponseWriter, r *http.Request) bool {
+	if r.Body == nil || r.Body == http.NoBody {
+		return false
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 0)
+	if _, err := io.Copy(io.Discard, r.Body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "request body not supported")
+		return true
+	}
+	return false
 }
 
 func (s *Server) enableCORS(next http.Handler) http.Handler {

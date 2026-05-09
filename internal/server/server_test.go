@@ -238,3 +238,23 @@ func TestHandleLogsReportsCollectionFailure(t *testing.T) {
 		t.Fatalf("expected sanitized log error, got %q", payload["error"])
 	}
 }
+
+func TestHandleAnalyzeRejectsUnexpectedRequestBody(t *testing.T) {
+	srv := NewServer(config.ServerConfig{}, nil, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/analyze", strings.NewReader(`{"scope":"all"}`))
+	srv.handleAnalyze(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON error response: %v", err)
+	}
+	if payload["error"] != "request body not supported" {
+		t.Fatalf("expected unsupported body error, got %q", payload["error"])
+	}
+}
