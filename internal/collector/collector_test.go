@@ -33,3 +33,12 @@ func TestFormatTopProcessesOmitsUsernames(t *testing.T) {
 		t.Fatalf("unexpected process summary: %q", got)
 	}
 }
+
+func TestCounterDeltaHandlesCounterReset(t *testing.T) {
+	if got := counterDelta(150, 100); got != 50 {
+		t.Fatalf("expected normal delta 50, got %d", got)
+	}
+	if got := counterDelta(10, 100); got != 0 {
+		t.Fatalf("expected reset delta 0, got %d", got)
+	}
+}

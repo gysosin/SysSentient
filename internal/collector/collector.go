@@ -80,7 +80,7 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 	if !c.lastCollectTime.IsZero() {
 		dt := now.Sub(c.lastCollectTime).Seconds()
 		if dt > 0 {
-			totalOps := (readOps - c.lastReadOps) + (writeOps - c.lastWriteOps)
+			totalOps := counterDelta(readOps, c.lastReadOps) + counterDelta(writeOps, c.lastWriteOps)
 			diskIOPS = float64(totalOps) / dt
 		}
 	}
@@ -145,6 +145,13 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 	}
 
 	return state, nil
+}
+
+func counterDelta(current, previous uint64) uint64 {
+	if current < previous {
+		return 0
+	}
+	return current - previous
 }
 
 func (c *Collector) getTopProcesses(limit int) ([]models.Process, error) {
