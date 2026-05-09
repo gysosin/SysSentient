@@ -24,7 +24,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/sys-dae
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && apt-get install -y --no-install-recommends ca-certificates curl tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system syssentient \
     && useradd --system --gid syssentient --home-dir /var/lib/sys-sentient --shell /usr/sbin/nologin syssentient \
@@ -37,6 +37,9 @@ COPY --from=web-builder /src/web/dist /app/web/dist
 
 ENV SYS_SENTIENT_DATABASE_PATH=/var/lib/sys-sentient/sys-sentient.db
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${SYS_SENTIENT_SERVER_PORT:-8080}/health" >/dev/null || exit 1
 
 USER syssentient
 ENTRYPOINT ["/app/sys-daemon"]
