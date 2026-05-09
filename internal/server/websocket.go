@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+var ErrBroadcastQueueFull = errors.New("websocket broadcast queue full")
 
 // WSMessage represents a message sent over WebSocket
 type WSMessage struct {
@@ -88,8 +91,12 @@ func (h *Hub) BroadcastMetrics(state *models.SystemState) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal metrics: %w", err)
 	}
-	h.broadcast <- data
-	return nil
+	select {
+	case h.broadcast <- data:
+		return nil
+	default:
+		return ErrBroadcastQueueFull
+	}
 }
 
 // ClientCount returns the number of connected clients
