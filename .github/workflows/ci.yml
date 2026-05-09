@@ -65,6 +65,9 @@ jobs:
       - name: Type-check dashboard
         run: npm run typecheck
 
+      - name: Run dashboard tests
+        run: npm test
+
       - name: Build dashboard
         run: npm run build
 
