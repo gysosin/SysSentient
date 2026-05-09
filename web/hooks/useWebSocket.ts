@@ -36,7 +36,7 @@ function isMetricsMessage(value: unknown): value is Extract<WSMessage, { type: '
         return false;
     }
     const payload = message.payload as Record<string, unknown>;
-    return typeof payload.timestamp === 'string';
+    return typeof payload.timestamp === 'string' && Number.isFinite(Date.parse(payload.timestamp));
 }
 
 interface UseWebSocketReturn {
