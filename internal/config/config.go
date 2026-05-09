@@ -114,10 +114,5 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("max daily cost cannot be negative: %.2f", c.Gemini.MaxDailyCost)
 	}
 
-	// Gemini API key is optional, but warn if model is set without key
-	if c.Gemini.APIKey == "" && c.Gemini.ModelName != "" {
-		fmt.Println("Warning: Gemini model configured but API key is missing")
-	}
-
 	return nil
 }
