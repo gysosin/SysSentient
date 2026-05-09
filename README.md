@@ -57,13 +57,18 @@ Configuration can be set via `config.yaml` or Environment Variables.
 
 ## Installation (Linux Systemd)
 
-1. Move binary and web assets to `/opt/sys-sentient`.
+1. Create a dedicated service account.
+   ```bash
+   sudo useradd --system --home-dir /var/lib/sys-sentient --shell /usr/sbin/nologin --groups systemd-journal sys-sentient
+   ```
+2. Move binary and web assets to `/opt/sys-sentient`.
    ```bash
    sudo mkdir -p /opt/sys-sentient
    sudo cp sys-daemon /opt/sys-sentient/
    sudo cp -r web/dist /opt/sys-sentient/web/dist
+   sudo chown -R root:root /opt/sys-sentient
    ```
-2. Install service file.
+3. Install service file.
    ```bash
    sudo cp sys-sentient.service /etc/systemd/system/
    sudo systemctl daemon-reload

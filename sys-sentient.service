@@ -4,12 +4,34 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=sys-sentient
+Group=sys-sentient
+SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/sys-sentient
 ExecStart=/opt/sys-sentient/sys-daemon
 Restart=always
 # Environment variables can be set here or in /etc/sys-sentient/config.yaml
-Environment=SYS_SENTIENT_DATABASE_PATH=/opt/sys-sentient/sys-sentient.db
+Environment=SYS_SENTIENT_DATABASE_PATH=/var/lib/sys-sentient/sys-sentient.db
+StateDirectory=sys-sentient
+CapabilityBoundingSet=
+LockPersonality=true
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sys-sentient
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
