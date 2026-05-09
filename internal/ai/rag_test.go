@@ -14,7 +14,7 @@ Error A
 Error A`
 	expected := `Error A [x3]
 Error B
-Error A [REPEATED]`
+Error A [x2]`
 
 	// Note: My implementation might be slightly different on the exact format, let's just check loosely or match exact impl.
 	// Current Impl:

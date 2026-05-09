@@ -3,6 +3,7 @@ package ai
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -94,10 +95,7 @@ func CollapseLogs(logs string) string {
 		} else {
 			if lastLine != "" {
 				if count > 1 {
-					collapsed = append(collapsed, lastLine + " [x" + string(rune(count+'0')) + "]") // Simple char conversion, works for small counts. 
-					// Actually, let's use proper formatting.
-					// But import fmt is overhead if not needed. Let's keep it simple.
-					// Re-writing to be robust.
+					collapsed = append(collapsed, fmt.Sprintf("%s [x%d]", lastLine, count))
 				} else {
 					collapsed = append(collapsed, lastLine)
 				}
@@ -109,7 +107,7 @@ func CollapseLogs(logs string) string {
 	// Flush last
 	if lastLine != "" {
 		if count > 1 {
-			collapsed = append(collapsed, lastLine+" [REPEATED]") 
+			collapsed = append(collapsed, fmt.Sprintf("%s [x%d]", lastLine, count))
 		} else {
 			collapsed = append(collapsed, lastLine)
 		}

@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"sys-sentient/internal/config"
 	"sys-sentient/internal/models"
+	"time"
 
 	"google.golang.org/genai"
 )
 
 type AIService struct {
-	client   *genai.Client
-	model    string
-	ragStore *RAGStore
+	client         *genai.Client
+	model          string
+	ragStore       *RAGStore
+	circuitBreaker *CircuitBreaker
 }
 
 func NewAIService(ctx context.Context, cfg config.GeminiConfig) (*AIService, error) {
-	// If API Key is empty, we might want to return nil or error, but let's allow it for now
-	// and fail on request if needed, or error out here.
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("gemini API key is missing")
 	}
@@ -30,59 +30,80 @@ func NewAIService(ctx context.Context, cfg config.GeminiConfig) (*AIService, err
 	}
 
 	return &AIService{
-		client:   client,
-		model:    cfg.ModelName,
-		ragStore: NewRAGStore(),
+		client:         client,
+		model:          cfg.ModelName,
+		ragStore:       NewRAGStore(),
+		circuitBreaker: NewCircuitBreaker(3, 2*time.Minute), // 3 failures, 2min reset
 	}, nil
 }
 
 func (s *AIService) AnalyzeSystemState(ctx context.Context, state models.SystemState, logs string) (string, error) {
-	// 1. Optimize Logs
 	optimizedLogs := CollapseLogs(logs)
 
-	// 2. Check RAG Cache (Deduplication)
-	// We use the combination of TopProcesses and Logs as the "signature" of the state
-	// Metrics themselves (CPU%) change too often to be part of the cache key usually,
-	// but significantly different states should trigger different insights.
-	// For this phase, we'll cache based on the LOGS + PROCESSES pattern.
 	signatureContent := state.TopProcesses + "\n" + optimizedLogs
 	if cached, found := s.ragStore.GetCachedInsight(signatureContent); found {
-		return cached + "\n[Cached Analysis]", nil
+		// Cached insight is already a JSON string
+		return cached, nil
 	}
 
-	prompt := fmt.Sprintf(`
-Analyze the following system metrics and logs for potential issues.
+	// Use circuit breaker to protect against repeated API failures
+	var result string
+	err := s.circuitBreaker.Execute(func() error {
+		prompt := fmt.Sprintf(`
+You are a system administrator AI. Analyze the metrics below.
 Timestamp: %s
-CPU Usage: %.2f%%
-Memory: %d / %d bytes
-Disk I/O: Read %d, Write %d
-Network: Sent %d, Recv %d
+CPU: %.2f%%
+RAM: %d / %d bytes
+Disk: Read %d, Write %d
+Net: Sent %d, Recv %d
+Temp: %.1f C
 
 Top Processes:
 %s
 
-Recent Logs:
+Logs:
 %s
 
-Provide a concise summary of the system health and any recommendations.
+Respond STRICTLY in JSON format with this structure:
+{
+  "status": "Healthy" | "Warning" | "Critical",
+  "summary": "One sentence summary.",
+  "detailedAnalysis": "Use bullet points and short paragraphs. No markdown bolding (**). Plain text or simple formatting.",
+  "recommendedActions": [
+    { "id": "unique_id", "command": "suggested shell command", "description": "what it does", "isSafe": boolean }
+  ]
+}
 `,
-		state.Timestamp,
-		state.CPUUsage,
-		state.MemoryUsed, state.MemoryTotal,
-		state.DiskReadBytes, state.DiskWriteBytes,
-		state.NetSentBytes, state.NetRecvBytes,
-		state.TopProcesses,
-		optimizedLogs,
-	)
+			state.Timestamp,
+			state.CPUUsage,
+			state.MemoryUsed, state.MemoryTotal,
+			state.DiskReadBytes, state.DiskWriteBytes,
+			state.NetSentBytes, state.NetRecvBytes,
+			state.Temperature,
+			state.TopProcesses,
+			optimizedLogs,
+		)
 
-	resp, err := s.client.Models.GenerateContent(ctx, s.model, genai.Text(prompt), nil)
+		// Configure for JSON response
+		resp, apiErr := s.client.Models.GenerateContent(ctx, s.model, genai.Text(prompt), &genai.GenerateContentConfig{
+			ResponseMIMEType: "application/json",
+		})
+		if apiErr != nil {
+			return fmt.Errorf("failed to generate content: %w", apiErr)
+		}
+
+		result = resp.Text()
+		return nil
+	})
+
 	if err != nil {
-		return "", fmt.Errorf("failed to generate content: %w", err)
+		// Check if circuit is open
+		if err == ErrCircuitOpen {
+			return "", fmt.Errorf("AI service unavailable (circuit breaker open): too many recent failures")
+		}
+		return "", err
 	}
 
-	result := resp.Text()
-	
-	// 3. Save to Cache
 	s.ragStore.SaveInsight(signatureContent, result)
 
 	return result, nil
