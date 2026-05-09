@@ -12,8 +12,8 @@ import (
 // Simple in-memory vector store for deduplication
 // In a real production system, this would be a persistent vector DB.
 type RAGStore struct {
-	cache    map[string]CachedInsight
-	mu       sync.RWMutex
+	cache map[string]CachedInsight
+	mu    sync.RWMutex
 }
 
 type CachedInsight struct {
@@ -40,30 +40,30 @@ func GenerateLogSignature(logs string) string {
 // GetCachedInsight checks if we've analyzed this exact log pattern recently
 func (r *RAGStore) GetCachedInsight(logs string) (string, bool) {
 	sig := GenerateLogSignature(logs)
-	
-r.mu.RLock()
+
+	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	entry, found := r.cache[sig]
 	if !found {
 		return "", false
 	}
-	
+
 	// Cache validity: 24 hours
 	if time.Since(entry.Timestamp) > 24*time.Hour {
 		return "", false
 	}
-	
+
 	return entry.Insight, true
 }
 
 func (r *RAGStore) SaveInsight(logs, insight string) {
 	sig := GenerateLogSignature(logs)
-	
-r.mu.Lock()
+
+	r.mu.Lock()
 	defer r.mu.Unlock()
-	
-r.cache[sig] = CachedInsight{
+
+	r.cache[sig] = CachedInsight{
 		Insight:   insight,
 		Timestamp: time.Now(),
 	}
@@ -89,7 +89,7 @@ func CollapseLogs(logs string) string {
 		if line == "" {
 			continue
 		}
-		
+
 		if line == lastLine {
 			count++
 		} else {
@@ -112,6 +112,6 @@ func CollapseLogs(logs string) string {
 			collapsed = append(collapsed, lastLine)
 		}
 	}
-	
+
 	return strings.Join(collapsed, "\n")
 }

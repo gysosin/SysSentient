@@ -8,17 +8,17 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Gemini   GeminiConfig   `mapstructure:"gemini"`
-	Privacy  PrivacyConfig  `mapstructure:"privacy"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Gemini    GeminiConfig    `mapstructure:"gemini"`
+	Privacy   PrivacyConfig   `mapstructure:"privacy"`
 	Collector CollectorConfig `mapstructure:"collector"`
 }
 
 type ServerConfig struct {
-	Port            int      `mapstructure:"port"`
-	APIKey          string   `mapstructure:"api_key"`
-	AllowedOrigins  []string `mapstructure:"allowed_origins"`
+	Port           int      `mapstructure:"port"`
+	APIKey         string   `mapstructure:"api_key"`
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
 }
 
 type DatabaseConfig struct {
@@ -26,14 +26,14 @@ type DatabaseConfig struct {
 }
 
 type GeminiConfig struct {
-	APIKey      string  `mapstructure:"api_key"`
-	ModelName   string  `mapstructure:"model_name"`
+	APIKey       string  `mapstructure:"api_key"`
+	ModelName    string  `mapstructure:"model_name"`
 	MaxDailyCost float64 `mapstructure:"max_daily_cost"`
 }
 
 type PrivacyConfig struct {
-	MaskIPs    bool `mapstructure:"mask_ips"`
-	MaskEmails bool `mapstructure:"mask_emails"`
+	MaskIPs       bool `mapstructure:"mask_ips"`
+	MaskEmails    bool `mapstructure:"mask_emails"`
 	MaskUsernames bool `mapstructure:"mask_usernames"`
 }
 
