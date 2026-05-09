@@ -3,9 +3,11 @@ export const REFRESH_RATE_MS = 2000; // 2 seconds
 export const LOG_REFRESH_RATE_MS = 10000; // 10 seconds
 export const HISTORY_LENGTH = 30; // 60 seconds of history on chart
 
-export const API_BASE_URL = import.meta.env.VITE_SYS_SENTIENT_API_URL || 'http://localhost:8080/api';
-export const WS_BASE_URL = import.meta.env.VITE_SYS_SENTIENT_WS_URL || 'ws://localhost:8080/ws/metrics';
-export const API_KEY = import.meta.env.VITE_SYS_SENTIENT_API_KEY || '';
+const viteEnv = import.meta.env ?? {};
+
+export const API_BASE_URL = viteEnv.VITE_SYS_SENTIENT_API_URL || 'http://localhost:8080/api';
+export const WS_BASE_URL = viteEnv.VITE_SYS_SENTIENT_WS_URL || 'ws://localhost:8080/ws/metrics';
+export const API_KEY = viteEnv.VITE_SYS_SENTIENT_API_KEY || '';
 
 export const authHeaders = (): HeadersInit => {
   if (!API_KEY) return {};

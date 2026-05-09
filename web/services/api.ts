@@ -1,5 +1,5 @@
-import { SystemMetrics, AIAnalysisResult, Process, LogEntry } from '../types';
-import { API_BASE_URL, authHeaders } from '../constants';
+import type { SystemMetrics, AIAction, AIAnalysisResult, Process, LogEntry } from '../types';
+import { API_BASE_URL, authHeaders } from '../constants.js';
 
 const API_REQUEST_TIMEOUT_MS = 8000;
 
@@ -45,6 +45,8 @@ interface RawSystemState {
 interface InsightRecord {
     content?: string;
 }
+
+const AI_STATUSES = new Set<AIAnalysisResult['status']>(['Healthy', 'Warning', 'Critical']);
 
 export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
     try {
@@ -132,15 +134,13 @@ export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
         throw new Error(await readAPIError(response, 'Failed to analyze'));
     }
 
-    const data = await response.json() as Partial<AIAnalysisResult>;
+    const data = await response.json() as unknown;
 
-    // Data should be the AIAnalysis object
-    return {
-        status: data.status || 'Warning',
-        summary: data.summary || "AI Analysis Generated",
-        detailedAnalysis: data.detailedAnalysis || "No details provided",
-        recommendedActions: data.recommendedActions || []
-    };
+    return normalizeAnalysisResult(data, {
+        fallbackStatus: 'Warning',
+        fallbackSummary: 'AI Analysis Generated',
+        fallbackDetails: 'No details provided',
+    });
 }
 
 export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => {
@@ -154,13 +154,12 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
         if (Array.isArray(data) && data.length > 0 && data[0].content) {
             // Content is a JSON string now
             try {
-                const parsed = JSON.parse(data[0].content);
-                return {
-                    status: parsed.status || 'Healthy',
-                    summary: parsed.summary || "Recent Insight",
-                    detailedAnalysis: parsed.detailedAnalysis,
-                    recommendedActions: parsed.recommendedActions || []
-                };
+                const parsed = JSON.parse(data[0].content) as unknown;
+                return normalizeAnalysisResult(parsed, {
+                    fallbackStatus: 'Warning',
+                    fallbackSummary: 'Recent Insight',
+                    fallbackDetails: 'No details provided',
+                });
             } catch (parseErr) {
                 // Fallback for old insights that were plain text
                 return {
@@ -202,6 +201,62 @@ function normalizeProcess(process: RawProcess): Process {
         memory: Number(process.memory) || 0,
         state: normalizeProcessState(process.state)
     };
+}
+
+function normalizeAnalysisResult(
+    value: unknown,
+    options: {
+        fallbackStatus: AIAnalysisResult['status'];
+        fallbackSummary: string;
+        fallbackDetails: string;
+    }
+): AIAnalysisResult {
+    const record = asRecord(value);
+    const status = record?.status;
+
+    return {
+        status: typeof status === 'string' && AI_STATUSES.has(status as AIAnalysisResult['status'])
+            ? status as AIAnalysisResult['status']
+            : options.fallbackStatus,
+        summary: nonEmptyString(record?.summary, options.fallbackSummary),
+        detailedAnalysis: nonEmptyString(record?.detailedAnalysis, options.fallbackDetails),
+        recommendedActions: normalizeRecommendedActions(record?.recommendedActions),
+    };
+}
+
+function normalizeRecommendedActions(value: unknown): AIAction[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.flatMap((item, index) => {
+        const action = asRecord(item);
+        if (!action) {
+            return [];
+        }
+
+        const command = nonEmptyString(action.command, '');
+        if (!command) {
+            return [];
+        }
+
+        return [{
+            id: nonEmptyString(action.id, `action-${index + 1}`),
+            command,
+            description: nonEmptyString(action.description, 'No description provided'),
+            isSafe: action.isSafe === true,
+        }];
+    });
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : null;
+}
+
+function nonEmptyString(value: unknown, fallback: string): string {
+    return typeof value === 'string' && value.trim() ? value : fallback;
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
