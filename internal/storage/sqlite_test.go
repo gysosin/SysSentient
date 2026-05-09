@@ -27,6 +27,39 @@ func TestNewStore(t *testing.T) {
 	}
 }
 
+func TestNewStoreConfiguresSQLiteRuntime(t *testing.T) {
+	dbPath := "test_runtime.db"
+	defer os.Remove(dbPath)
+	defer os.Remove(dbPath + "-shm")
+	defer os.Remove(dbPath + "-wal")
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if maxOpen := store.db.Stats().MaxOpenConnections; maxOpen != 1 {
+		t.Fatalf("Expected one open SQLite connection, got %d", maxOpen)
+	}
+
+	var busyTimeout int
+	if err := store.db.QueryRow(`PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatalf("Failed to read busy_timeout pragma: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("Expected busy_timeout 5000, got %d", busyTimeout)
+	}
+
+	var foreignKeys int
+	if err := store.db.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+		t.Fatalf("Failed to read foreign_keys pragma: %v", err)
+	}
+	if foreignKeys != 1 {
+		t.Fatalf("Expected foreign key enforcement, got %d", foreignKeys)
+	}
+}
+
 func TestSaveAndGetRecent(t *testing.T) {
 	dbPath := "test_save.db"
 	defer os.Remove(dbPath)

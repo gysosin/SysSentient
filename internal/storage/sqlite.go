@@ -15,11 +15,12 @@ type Store struct {
 }
 
 func NewStore(dbPath string) (*Store, error) {
-	// Enable WAL mode for concurrency
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL")
+	db, err := sql.Open("sqlite3", sqliteDSN(dbPath))
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	if err := createTable(db); err != nil {
 		db.Close()
@@ -33,6 +34,10 @@ func NewStore(dbPath string) (*Store, error) {
 	}
 
 	return &Store{db: db}, nil
+}
+
+func sqliteDSN(dbPath string) string {
+	return dbPath + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_foreign_keys=ON"
 }
 
 func createTable(db *sql.DB) error {
