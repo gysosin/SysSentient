@@ -8,12 +8,40 @@ interface AIInsightPanelProps {
   onRefresh: () => void;
 }
 
+const ANALYSIS_ID_LENGTH = 6;
+
+function deriveAnalysisId(analysis: AIAnalysisResult): string {
+  const source = JSON.stringify({
+    status: analysis.status,
+    summary: analysis.summary,
+    detailedAnalysis: analysis.detailedAnalysis,
+    recommendedActions: analysis.recommendedActions.map((action) => ({
+      id: action.id,
+      command: action.command,
+      description: action.description,
+      isSafe: action.isSafe,
+    })),
+  });
+  let hash = 0x811c9dc5;
+
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return (hash >>> 0)
+    .toString(36)
+    .toUpperCase()
+    .padStart(ANALYSIS_ID_LENGTH, '0')
+    .slice(-ANALYSIS_ID_LENGTH);
+}
+
 const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loading, onRefresh }) => {
   const [copiedActionId, setCopiedActionId] = React.useState<string | null>(null);
   const [copyErrorActionId, setCopyErrorActionId] = React.useState<string | null>(null);
   const analysisId = React.useMemo(() => {
     if (!analysis) return '';
-    return Math.random().toString(36).slice(2, 8).toUpperCase();
+    return deriveAnalysisId(analysis);
   }, [analysis]);
 
   const handleCopyCommand = async (actionId: string, command: string) => {
