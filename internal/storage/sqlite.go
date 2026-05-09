@@ -218,12 +218,27 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 		); err != nil {
 			return nil, err
 		}
-		// Deserialize cpu_per_core
-		json.Unmarshal([]byte(cpuPerCoreJSON), &m.CPUPerCore)
-		json.Unmarshal([]byte(processesJSON), &m.Processes)
+		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
+		m.Processes = decodeProcesses(processesJSON)
 		results = append(results, m)
 	}
 	return results, nil
+}
+
+func decodeCPUPerCore(raw string) []float64 {
+	var values []float64
+	if err := json.Unmarshal([]byte(raw), &values); err != nil || values == nil {
+		return []float64{}
+	}
+	return values
+}
+
+func decodeProcesses(raw string) []models.Process {
+	var values []models.Process
+	if err := json.Unmarshal([]byte(raw), &values); err != nil || values == nil {
+		return []models.Process{}
+	}
+	return values
 }
 
 type Insight struct {

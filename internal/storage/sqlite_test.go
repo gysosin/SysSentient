@@ -242,6 +242,44 @@ func TestMigrateSchemaIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestGetRecentDefaultsCorruptJSONColumnsToEmptySlices(t *testing.T) {
+	dbPath := "test_corrupt_json.db"
+	defer os.Remove(dbPath)
+	defer os.Remove(dbPath + "-shm")
+	defer os.Remove(dbPath + "-wal")
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	_, err = store.db.Exec(`
+		INSERT INTO metrics (
+			timestamp, cpu_usage, cpu_per_core, memory_used, memory_total,
+			disk_read_bytes, disk_write_bytes, net_sent_bytes, net_recv_bytes,
+			temperature, top_processes, processes
+		) VALUES (CURRENT_TIMESTAMP, 1, 'not-json', 1, 1, 0, 0, 0, 0, 0, '', 'not-json')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to seed corrupt metric: %v", err)
+	}
+
+	states, err := store.GetRecent(1)
+	if err != nil {
+		t.Fatalf("Failed to read corrupt metric: %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("Expected one metric, got %d", len(states))
+	}
+	if states[0].CPUPerCore == nil {
+		t.Fatal("Expected corrupt cpu_per_core JSON to return an empty slice")
+	}
+	if states[0].Processes == nil {
+		t.Fatal("Expected corrupt processes JSON to return an empty slice")
+	}
+}
+
 func TestPruneOldMetrics(t *testing.T) {
 	dbPath := "test_prune.db"
 	defer os.Remove(dbPath)
