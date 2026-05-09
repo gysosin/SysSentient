@@ -57,7 +57,10 @@ func TestSaveAndGetRecent(t *testing.T) {
 		LoadAvg5:       1.2,
 		LoadAvg15:      1.0,
 		Temperature:    65.5,
-		TopProcesses:   "systemd (1.0%), chrome (5.0%)",
+		TopProcesses:   "chrome (5.0%, 256MB, alice)",
+		Processes: []models.Process{
+			{PID: 42, Name: "chrome", User: "alice", CPU: 5.0, Memory: 256, State: "Running"},
+		},
 	}
 
 	err = store.Save(state)
@@ -82,6 +85,12 @@ func TestSaveAndGetRecent(t *testing.T) {
 
 	if len(retrieved.CPUPerCore) != 2 {
 		t.Errorf("Expected 2 CPU cores, got %d", len(retrieved.CPUPerCore))
+	}
+	if len(retrieved.Processes) != 1 {
+		t.Fatalf("Expected 1 process, got %d", len(retrieved.Processes))
+	}
+	if retrieved.Processes[0].PID != 42 || retrieved.Processes[0].User != "alice" {
+		t.Fatalf("Expected structured process to round trip, got %+v", retrieved.Processes[0])
 	}
 }
 
@@ -177,6 +186,9 @@ func TestNewStoreMigratesExistingMetricsTable(t *testing.T) {
 	}
 	if states[0].Temperature != state.Temperature {
 		t.Fatalf("Expected temperature %.1f, got %.1f", state.Temperature, states[0].Temperature)
+	}
+	if states[0].Processes == nil {
+		t.Fatal("Expected migrated metrics to return an empty process list")
 	}
 }
 

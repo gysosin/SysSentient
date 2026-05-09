@@ -21,6 +21,16 @@ type SystemState struct {
 	LoadAvg15      float64   `json:"load_avg_15"`      // 15-minute load average
 	Temperature    float64   `json:"temperature"`      // System temperature in Celsius
 	TopProcesses   string    `json:"top_processes"`    // Human readable summary of top processes
+	Processes      []Process `json:"processes"`        // Structured top processes
+}
+
+type Process struct {
+	PID    int32   `json:"pid"`
+	Name   string  `json:"name"`
+	User   string  `json:"user"`
+	CPU    float64 `json:"cpu"`
+	Memory uint64  `json:"memory"` // Resident memory in MB
+	State  string  `json:"state"`
 }
 
 type AIAction struct {

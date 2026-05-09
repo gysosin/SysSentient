@@ -57,9 +57,13 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
                 loadAvg15: curr.load_avg_15 || 0,
             });
 
-            // Parse processes from the latest entry
-            if (i === sorted.length - 1 && curr.top_processes) {
-                latestProcesses = parseProcesses(curr.top_processes);
+            // Parse processes from the latest entry.
+            if (i === sorted.length - 1) {
+                if (Array.isArray(curr.processes) && curr.processes.length > 0) {
+                    latestProcesses = curr.processes.map(normalizeProcess);
+                } else if (curr.top_processes) {
+                    latestProcesses = parseProcesses(curr.top_processes);
+                }
             }
         }
 
@@ -126,6 +130,24 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
         console.error("API Error fetchLatestInsight", e);
         return null;
     }
+}
+
+function normalizeProcess(process: any): Process {
+    return {
+        pid: Number(process.pid) || 0,
+        name: String(process.name || '?'),
+        user: String(process.user || '?'),
+        cpu: Number(process.cpu) || 0,
+        memory: Number(process.memory) || 0,
+        state: normalizeProcessState(process.state)
+    };
+}
+
+function normalizeProcessState(state: unknown): Process['state'] {
+    if (state === 'Running' || state === 'Sleeping' || state === 'Zombie' || state === 'Stopped') {
+        return state;
+    }
+    return 'Running';
 }
 
 function parseProcesses(procStr: string): Process[] {

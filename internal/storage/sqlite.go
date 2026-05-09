@@ -50,7 +50,8 @@ func createTable(db *sql.DB) error {
 		net_sent_bytes INTEGER,
 		net_recv_bytes INTEGER,
 		temperature REAL,
-		top_processes TEXT
+		top_processes TEXT,
+		processes TEXT
 	);
 	`
 	if _, err = db.Exec(queryMetrics); err != nil {
@@ -88,6 +89,7 @@ func migrateSchema(db *sql.DB) error {
 		{"load_avg_5", "REAL DEFAULT 0"},
 		{"load_avg_15", "REAL DEFAULT 0"},
 		{"temperature", "REAL DEFAULT 0"},
+		{"processes", "TEXT DEFAULT '[]'"},
 	}
 
 	for _, col := range newColumns {
@@ -105,22 +107,32 @@ func migrateSchema(db *sql.DB) error {
 }
 
 func (s *Store) Save(m *models.SystemState) error {
-	// Serialize cpu_per_core as JSON
-	cpuPerCoreJSON, _ := json.Marshal(m.CPUPerCore)
+	cpuPerCoreJSON, err := json.Marshal(m.CPUPerCore)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cpu_per_core: %w", err)
+	}
+	processes := m.Processes
+	if processes == nil {
+		processes = []models.Process{}
+	}
+	processesJSON, err := json.Marshal(processes)
+	if err != nil {
+		return fmt.Errorf("failed to marshal processes: %w", err)
+	}
 
 	query := `
 	INSERT INTO metrics (
 		timestamp, cpu_usage, cpu_per_core, memory_used, memory_total,
 		swap_used, swap_total, disk_read_bytes, disk_write_bytes, disk_iops,
 		net_sent_bytes, net_recv_bytes, load_avg_1, load_avg_5, load_avg_15,
-		temperature, top_processes
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		temperature, top_processes, processes
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := s.db.Exec(query,
+	_, err = s.db.Exec(query,
 		m.Timestamp, m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
 		m.SwapUsed, m.SwapTotal, m.DiskReadBytes, m.DiskWriteBytes, m.DiskIOPS,
 		m.NetSentBytes, m.NetRecvBytes, m.LoadAvg1, m.LoadAvg5, m.LoadAvg15,
-		m.Temperature, m.TopProcesses,
+		m.Temperature, m.TopProcesses, string(processesJSON),
 	)
 	return err
 }
@@ -144,7 +156,7 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 		memory_used, memory_total, COALESCE(swap_used, 0), COALESCE(swap_total, 0),
 		disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
 		net_sent_bytes, net_recv_bytes, COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
-		temperature, top_processes
+		temperature, top_processes, COALESCE(processes, '[]')
 		FROM metrics ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
@@ -156,17 +168,19 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 	for rows.Next() {
 		var m models.SystemState
 		var cpuPerCoreJSON string
+		var processesJSON string
 		if err := rows.Scan(
 			&m.Timestamp, &m.CPUUsage, &cpuPerCoreJSON,
 			&m.MemoryUsed, &m.MemoryTotal, &m.SwapUsed, &m.SwapTotal,
 			&m.DiskReadBytes, &m.DiskWriteBytes, &m.DiskIOPS,
 			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
-			&m.Temperature, &m.TopProcesses,
+			&m.Temperature, &m.TopProcesses, &processesJSON,
 		); err != nil {
 			return nil, err
 		}
 		// Deserialize cpu_per_core
 		json.Unmarshal([]byte(cpuPerCoreJSON), &m.CPUPerCore)
+		json.Unmarshal([]byte(processesJSON), &m.Processes)
 		results = append(results, m)
 	}
 	return results, nil

@@ -117,7 +117,8 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 	}
 
 	// 7. Top Processes
-	topProcs, err := c.getTopProcesses(3)
+	processes, err := c.getTopProcesses(3)
+	topProcs := formatTopProcesses(processes)
 	if err != nil {
 		topProcs = "Error collecting processes"
 	}
@@ -140,25 +141,19 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 		LoadAvg15:      loadAvg15,
 		Temperature:    temp,
 		TopProcesses:   topProcs,
+		Processes:      processes,
 	}
 
 	return state, nil
 }
 
-type procStat struct {
-	Name     string
-	CPU      float64
-	Memory   uint64
-	Username string
-}
-
-func (c *Collector) getTopProcesses(limit int) (string, error) {
+func (c *Collector) getTopProcesses(limit int) ([]models.Process, error) {
 	pids, err := process.Pids()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var stats []procStat
+	var stats []models.Process
 	newCache := make(map[int32]*process.Process)
 
 	for _, pid := range pids {
@@ -180,15 +175,18 @@ func (c *Collector) getTopProcesses(limit int) (string, error) {
 			name, _ := p.Name()
 			username, _ := p.Username()
 			memInfo, _ := p.MemoryInfo()
+			status, _ := p.Status()
 			memoryMB := uint64(0)
 			if memInfo != nil {
 				memoryMB = memInfo.RSS / 1024 / 1024 // Convert to MB
 			}
-			stats = append(stats, procStat{
-				Name:     name,
-				CPU:      cpu,
-				Memory:   memoryMB,
-				Username: username,
+			stats = append(stats, models.Process{
+				PID:    pid,
+				Name:   name,
+				User:   username,
+				CPU:    cpu,
+				Memory: memoryMB,
+				State:  normalizeProcessState(status),
 			})
 		}
 	}
@@ -200,18 +198,34 @@ func (c *Collector) getTopProcesses(limit int) (string, error) {
 		return stats[i].CPU > stats[j].CPU
 	})
 
-	var result []string
-	count := 0
-	for _, s := range stats {
-		if count >= limit {
-			break
-		}
-		result = append(result, fmt.Sprintf("%s (%.1f%%, %dMB, %s)", s.Name, s.CPU, s.Memory, s.Username))
-		count++
+	if len(stats) > limit {
+		stats = stats[:limit]
+	}
+	return stats, nil
+}
+
+func formatTopProcesses(processes []models.Process) string {
+	if len(processes) == 0 {
+		return "None"
 	}
 
-	if len(result) == 0 {
-		return "None", nil
+	result := make([]string, 0, len(processes))
+	for _, p := range processes {
+		result = append(result, fmt.Sprintf("%s (%.1f%%, %dMB, %s)", p.Name, p.CPU, p.Memory, p.User))
 	}
-	return strings.Join(result, ", "), nil
+	return strings.Join(result, ", ")
+}
+
+func normalizeProcessState(status []string) string {
+	for _, value := range status {
+		switch strings.ToLower(value) {
+		case "running", "run":
+			return "Running"
+		case "zombie":
+			return "Zombie"
+		case "stopped", "stop":
+			return "Stopped"
+		}
+	}
+	return "Sleeping"
 }
