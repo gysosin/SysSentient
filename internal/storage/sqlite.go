@@ -2,7 +2,9 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"sys-sentient/internal/models"
 
@@ -25,6 +27,12 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	// Run migrations for new columns
+	if err := migrateSchema(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return &Store{db: db}, nil
 }
 
@@ -41,6 +49,7 @@ func createTable(db *sql.DB) error {
 		disk_write_bytes INTEGER,
 		net_sent_bytes INTEGER,
 		net_recv_bytes INTEGER,
+		temperature REAL,
 		top_processes TEXT
 	);
 	`
@@ -64,16 +73,54 @@ func createTable(db *sql.DB) error {
 	return err
 }
 
+// migrateSchema adds new columns to existing tables
+func migrateSchema(db *sql.DB) error {
+	// List of new columns to add if they don't exist
+	newColumns := []struct {
+		name       string
+		columnType string
+	}{
+		{"cpu_per_core", "TEXT"},
+		{"swap_used", "INTEGER DEFAULT 0"},
+		{"swap_total", "INTEGER DEFAULT 0"},
+		{"disk_iops", "REAL DEFAULT 0"},
+		{"load_avg_1", "REAL DEFAULT 0"},
+		{"load_avg_5", "REAL DEFAULT 0"},
+		{"load_avg_15", "REAL DEFAULT 0"},
+		{"temperature", "REAL DEFAULT 0"},
+	}
+
+	for _, col := range newColumns {
+		// SQLite doesn't have IF NOT EXISTS for ALTER TABLE, so we check first
+		query := fmt.Sprintf("ALTER TABLE metrics ADD COLUMN %s %s", col.name, col.columnType)
+		_, err := db.Exec(query)
+		if err != nil {
+			// Ignore "duplicate column" error
+			if !strings.Contains(err.Error(), fmt.Sprintf("duplicate column name: %s", col.name)) {
+				return fmt.Errorf("failed to add metrics.%s: %w", col.name, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Store) Save(m *models.SystemState) error {
+	// Serialize cpu_per_core as JSON
+	cpuPerCoreJSON, _ := json.Marshal(m.CPUPerCore)
+
 	query := `
 	INSERT INTO metrics (
-		timestamp, cpu_usage, memory_used, memory_total, 
-		disk_read_bytes, disk_write_bytes, net_sent_bytes, net_recv_bytes, top_processes
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		timestamp, cpu_usage, cpu_per_core, memory_used, memory_total,
+		swap_used, swap_total, disk_read_bytes, disk_write_bytes, disk_iops,
+		net_sent_bytes, net_recv_bytes, load_avg_1, load_avg_5, load_avg_15,
+		temperature, top_processes
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := s.db.Exec(query,
-		m.Timestamp, m.CPUUsage, m.MemoryUsed, m.MemoryTotal,
-		m.DiskReadBytes, m.DiskWriteBytes, m.NetSentBytes, m.NetRecvBytes, m.TopProcesses,
+		m.Timestamp, m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
+		m.SwapUsed, m.SwapTotal, m.DiskReadBytes, m.DiskWriteBytes, m.DiskIOPS,
+		m.NetSentBytes, m.NetRecvBytes, m.LoadAvg1, m.LoadAvg5, m.LoadAvg15,
+		m.Temperature, m.TopProcesses,
 	)
 	return err
 }
@@ -93,7 +140,12 @@ func (s *Store) SaveInsight(content string) error {
 }
 
 func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
-	query := `SELECT timestamp, cpu_usage, memory_used, memory_total, top_processes FROM metrics ORDER BY timestamp DESC LIMIT ?`
+	query := `SELECT timestamp, cpu_usage, COALESCE(cpu_per_core, '[]'),
+		memory_used, memory_total, COALESCE(swap_used, 0), COALESCE(swap_total, 0),
+		disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
+		net_sent_bytes, net_recv_bytes, COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
+		temperature, top_processes
+		FROM metrics ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
 		return nil, err
@@ -103,9 +155,18 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 	var results []models.SystemState
 	for rows.Next() {
 		var m models.SystemState
-		if err := rows.Scan(&m.Timestamp, &m.CPUUsage, &m.MemoryUsed, &m.MemoryTotal, &m.TopProcesses); err != nil {
+		var cpuPerCoreJSON string
+		if err := rows.Scan(
+			&m.Timestamp, &m.CPUUsage, &cpuPerCoreJSON,
+			&m.MemoryUsed, &m.MemoryTotal, &m.SwapUsed, &m.SwapTotal,
+			&m.DiskReadBytes, &m.DiskWriteBytes, &m.DiskIOPS,
+			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
+			&m.Temperature, &m.TopProcesses,
+		); err != nil {
 			return nil, err
 		}
+		// Deserialize cpu_per_core
+		json.Unmarshal([]byte(cpuPerCoreJSON), &m.CPUPerCore)
 		results = append(results, m)
 	}
 	return results, nil

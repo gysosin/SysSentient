@@ -9,6 +9,7 @@ import (
 	"sys-sentient/internal/ai"
 	"sys-sentient/internal/collector"
 	"sys-sentient/internal/config"
+	"sys-sentient/internal/logs"
 	"sys-sentient/internal/pii"
 	"sys-sentient/internal/server"
 	"sys-sentient/internal/storage"
@@ -54,11 +55,15 @@ func main() {
 	// 5. Initialize PII Scrubber
 	scrubber := pii.NewScrubber(cfg.Privacy.MaskIPs, cfg.Privacy.MaskEmails, cfg.Privacy.MaskUsernames)
 
-	// 6. Initialize Collector
+	// 6. Initialize Log Reader
+	logReader := logs.NewLogReader(50) // max 50 log lines
+	fmt.Println("Log reader initialized.")
+
+	// 7. Initialize Collector
 	col := collector.NewCollector()
 	fmt.Println("Collector initialized. Starting polling loop...")
 
-	// 7. Polling Loop
+	// 8. Polling Loop
 	interval := time.Duration(cfg.Collector.PollIntervalSeconds) * time.Second
 	if interval == 0 {
 		interval = 2 * time.Second
@@ -96,12 +101,18 @@ func main() {
 				continue
 			}
 
+			// Broadcast to WebSocket clients
+			if err := srv.Hub.BroadcastMetrics(state); err != nil {
+				log.Printf("Error broadcasting metrics: %v", err)
+			}
+
 			// Log to console
-			fmt.Printf("[%s] CPU: %.2f%% | RAM: %d/%d MB | Procs: %s\n",
+			fmt.Printf("[%s] CPU: %.2f%% | RAM: %d/%d MB | Load: %.2f | Procs: %s\n",
 				state.Timestamp.Format(time.TimeOnly),
 				state.CPUUsage,
 				state.MemoryUsed/1024/1024,
 				state.MemoryTotal/1024/1024,
+				state.LoadAvg1,
 				state.TopProcesses,
 			)
 
@@ -116,8 +127,12 @@ func main() {
 					lastAnalysisTime = time.Now()
 
 					go func() {
-						// Placeholder for log reading
-						rawLogs := "Log reading not yet implemented. (No recent errors in dmesg)"
+						// Collect real system logs with timeout
+						rawLogs, err := logReader.GetLogsWithTimeout(5 * time.Second)
+						if err != nil {
+							log.Printf("Warning: Failed to collect logs: %v", err)
+							rawLogs = "Failed to collect system logs."
+						}
 						scrubbedLogs := scrubber.SanitizeLog(rawLogs)
 
 						insight, err := aiService.AnalyzeSystemState(context.Background(), *state, scrubbedLogs)
@@ -127,7 +142,7 @@ func main() {
 						}
 
 						fmt.Printf("🤖 AI Insight: %s\n", insight)
-						// Save is handled inside AnalyzeSystemState (RAG cache) or externally? 
+						// Save is handled inside AnalyzeSystemState (RAG cache) or externally?
 						// Wait, RAG cache saves it to cache, but we also want to save to DB for history.
 						if err := store.SaveInsight(insight); err != nil {
 							log.Printf("Error saving insight: %v", err)
