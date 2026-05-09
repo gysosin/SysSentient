@@ -58,3 +58,30 @@ test('fetchMetricsHistory skips records with invalid timestamps', async () => {
   assert.equal(metrics[0].timestamp, Date.parse(timestamp));
   assert.equal(metrics[0].cpuLoad, 25);
 });
+
+test('fetchMetricsHistory replaces non-finite metric numbers with safe defaults', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify([
+    {
+      timestamp: '2026-05-09T10:15:30Z',
+      cpu_usage: 'hot',
+      cpu_per_core: [10, 'bad', Number.NaN],
+      memory_used: 'NaN',
+      memory_total: 'unknown',
+      disk_iops: Number.POSITIVE_INFINITY,
+      load_avg_1: null,
+    },
+  ]), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const { metrics } = await fetchMetricsHistory();
+
+  assert.equal(metrics.length, 1);
+  assert.deepEqual(metrics[0].cpuPerCore, [10, 0, 0]);
+  assert.equal(metrics[0].cpuLoad, 0);
+  assert.equal(metrics[0].memoryUsed, 0);
+  assert.equal(metrics[0].memoryTotal, 1 / 1024 / 1024);
+  assert.equal(metrics[0].diskIOPS, 0);
+  assert.equal(metrics[0].loadAvg1, 0);
+});

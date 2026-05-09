@@ -81,30 +81,30 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
                 const dt = (t1 - previous.timestamp) / 1000;
 
                 if (dt > 0) {
-                    diskReadRate = ((curr.disk_read_bytes ?? 0) - (previous.state.disk_read_bytes ?? 0)) / dt;
-                    diskWriteRate = ((curr.disk_write_bytes ?? 0) - (previous.state.disk_write_bytes ?? 0)) / dt;
-                    netRxRate = ((curr.net_recv_bytes ?? 0) - (previous.state.net_recv_bytes ?? 0)) / dt;
-                    netTxRate = ((curr.net_sent_bytes ?? 0) - (previous.state.net_sent_bytes ?? 0)) / dt;
+                    diskReadRate = (finiteNumber(curr.disk_read_bytes) - finiteNumber(previous.state.disk_read_bytes)) / dt;
+                    diskWriteRate = (finiteNumber(curr.disk_write_bytes) - finiteNumber(previous.state.disk_write_bytes)) / dt;
+                    netRxRate = (finiteNumber(curr.net_recv_bytes) - finiteNumber(previous.state.net_recv_bytes)) / dt;
+                    netTxRate = (finiteNumber(curr.net_sent_bytes) - finiteNumber(previous.state.net_sent_bytes)) / dt;
                 }
             }
 
             metrics.push({
                 timestamp: t1,
-                cpuLoad: curr.cpu_usage || 0,
-                cpuPerCore: curr.cpu_per_core || [],
-                memoryUsed: (curr.memory_used || 0) / 1024 / 1024,
-                memoryTotal: (curr.memory_total || 1) / 1024 / 1024,
-                swapUsed: (curr.swap_used || 0) / 1024 / 1024,
-                swapTotal: (curr.swap_total || 0) / 1024 / 1024,
-                temperature: curr.temperature || 0,
+                cpuLoad: finiteNumber(curr.cpu_usage),
+                cpuPerCore: finiteNumberArray(curr.cpu_per_core),
+                memoryUsed: finiteNumber(curr.memory_used) / 1024 / 1024,
+                memoryTotal: positiveFiniteNumber(curr.memory_total, 1) / 1024 / 1024,
+                swapUsed: finiteNumber(curr.swap_used) / 1024 / 1024,
+                swapTotal: finiteNumber(curr.swap_total) / 1024 / 1024,
+                temperature: finiteNumber(curr.temperature),
                 diskRead: Math.max(0, diskReadRate / 1024 / 1024), // MB/s
                 diskWrite: Math.max(0, diskWriteRate / 1024 / 1024),
-                diskIOPS: curr.disk_iops || 0,
+                diskIOPS: finiteNumber(curr.disk_iops),
                 networkRx: Math.max(0, netRxRate / 1024), // KB/s
                 networkTx: Math.max(0, netTxRate / 1024),
-                loadAvg1: curr.load_avg_1 || 0,
-                loadAvg5: curr.load_avg_5 || 0,
-                loadAvg15: curr.load_avg_15 || 0,
+                loadAvg1: finiteNumber(curr.load_avg_1),
+                loadAvg5: finiteNumber(curr.load_avg_5),
+                loadAvg15: finiteNumber(curr.load_avg_15),
             });
 
             if (Array.isArray(curr.processes) && curr.processes.length > 0) {
@@ -257,6 +257,23 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function nonEmptyString(value: unknown, fallback: string): string {
     return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function finiteNumber(value: unknown, fallback = 0): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function positiveFiniteNumber(value: unknown, fallback: number): number {
+    const parsed = finiteNumber(value, fallback);
+    return parsed > 0 ? parsed : fallback;
+}
+
+function finiteNumberArray(value: unknown): number[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.map((item) => finiteNumber(item));
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
