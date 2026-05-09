@@ -67,3 +67,13 @@ jobs:
 
       - name: Build dashboard
         run: npm run build
+
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build --pull -t sys-sentient:ci .
