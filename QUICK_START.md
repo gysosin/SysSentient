@@ -163,6 +163,8 @@ collector:
 
 database:
   path: "sys-sentient.db"
+  metrics_retention_hours: 24
+  insights_retention_hours: 168
 ```
 
 ---

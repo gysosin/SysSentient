@@ -22,7 +22,9 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Path string `mapstructure:"path"`
+	Path                   string `mapstructure:"path"`
+	MetricsRetentionHours  int    `mapstructure:"metrics_retention_hours"`
+	InsightsRetentionHours int    `mapstructure:"insights_retention_hours"`
 }
 
 type GeminiConfig struct {
@@ -49,6 +51,8 @@ func LoadConfig(path string) (*Config, error) {
 	v.SetDefault("server.api_key", "")
 	v.SetDefault("server.allowed_origins", []string{"http://localhost:8080", "http://localhost:5173"})
 	v.SetDefault("database.path", "sys-sentient.db")
+	v.SetDefault("database.metrics_retention_hours", 24)
+	v.SetDefault("database.insights_retention_hours", 7*24)
 	v.SetDefault("gemini.api_key", "") // Ensure env var is picked up
 	v.SetDefault("gemini.model_name", "gemini-2.5-flash-lite")
 	v.SetDefault("gemini.max_daily_cost", 1.0)
@@ -108,6 +112,14 @@ func (c *Config) Validate() error {
 
 	if c.Database.Path == "" {
 		return fmt.Errorf("database path cannot be empty")
+	}
+
+	if c.Database.MetricsRetentionHours < 1 {
+		return fmt.Errorf("metrics retention must be at least 1 hour, got %d", c.Database.MetricsRetentionHours)
+	}
+
+	if c.Database.InsightsRetentionHours < 1 {
+		return fmt.Errorf("insights retention must be at least 1 hour, got %d", c.Database.InsightsRetentionHours)
 	}
 
 	if c.Gemini.MaxDailyCost < 0 {

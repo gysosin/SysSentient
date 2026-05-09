@@ -67,6 +67,8 @@ Configuration can be set via `config.yaml` or Environment Variables.
 | `SYS_SENTIENT_SERVER_PORT` | 8080 | Web Server Port |
 | `SYS_SENTIENT_SERVER_API_KEY` | - | Optional API key for `/api/*` and `/ws/*` |
 | `SYS_SENTIENT_SERVER_ALLOWED_ORIGINS` | `http://localhost:8080,http://localhost:5173` | CORS/WebSocket origin allowlist |
+| `SYS_SENTIENT_DATABASE_METRICS_RETENTION_HOURS` | 24 | Metrics retention window |
+| `SYS_SENTIENT_DATABASE_INSIGHTS_RETENTION_HOURS` | 168 | AI insight retention window |
 | `SYS_SENTIENT_GEMINI_API_KEY` | - | Gemini API key; AI is disabled when omitted |
 | `SYS_SENTIENT_GEMINI_MODEL_NAME` | gemini-2.5-flash-lite | AI Model |
 | `SYS_SENTIENT_COLLECTOR_POLL_INTERVAL_SECONDS` | 2 | Metrics Poll Rate |

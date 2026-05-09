@@ -17,6 +17,12 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.Gemini.ModelName != "gemini-2.5-flash-lite" {
 		t.Errorf("Expected default model gemini-2.5-flash-lite, got %s", cfg.Gemini.ModelName)
 	}
+	if cfg.Database.MetricsRetentionHours != 24 {
+		t.Errorf("Expected default metrics retention 24, got %d", cfg.Database.MetricsRetentionHours)
+	}
+	if cfg.Database.InsightsRetentionHours != 168 {
+		t.Errorf("Expected default insights retention 168, got %d", cfg.Database.InsightsRetentionHours)
+	}
 }
 
 func TestLoadConfig_EnvOverride(t *testing.T) {
@@ -50,5 +56,24 @@ func TestLoadConfig_AllowedOriginsEnvOverride(t *testing.T) {
 		if cfg.Server.AllowedOrigins[i] != expected[i] {
 			t.Fatalf("Expected origin %d to be %q, got %q", i, expected[i], cfg.Server.AllowedOrigins[i])
 		}
+	}
+}
+
+func TestLoadConfig_RetentionEnvOverride(t *testing.T) {
+	os.Setenv("SYS_SENTIENT_DATABASE_METRICS_RETENTION_HOURS", "48")
+	os.Setenv("SYS_SENTIENT_DATABASE_INSIGHTS_RETENTION_HOURS", "336")
+	defer os.Unsetenv("SYS_SENTIENT_DATABASE_METRICS_RETENTION_HOURS")
+	defer os.Unsetenv("SYS_SENTIENT_DATABASE_INSIGHTS_RETENTION_HOURS")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Database.MetricsRetentionHours != 48 {
+		t.Fatalf("Expected metrics retention override 48, got %d", cfg.Database.MetricsRetentionHours)
+	}
+	if cfg.Database.InsightsRetentionHours != 336 {
+		t.Fatalf("Expected insights retention override 336, got %d", cfg.Database.InsightsRetentionHours)
 	}
 }
