@@ -30,6 +30,7 @@ func NormalizeAnalysisResponse(raw string) (string, error) {
 	}
 
 	actions := make([]models.AIAction, 0, len(analysis.RecommendedActions))
+	seenActionIDs := make(map[string]int)
 	for idx, action := range analysis.RecommendedActions {
 		action.ID = strings.TrimSpace(action.ID)
 		action.Command = strings.TrimSpace(action.Command)
@@ -40,6 +41,18 @@ func NormalizeAnalysisResponse(raw string) (string, error) {
 		if action.ID == "" {
 			action.ID = fmt.Sprintf("action_%d", idx+1)
 		}
+		baseID := action.ID
+		seenActionIDs[baseID]++
+		if seenActionIDs[baseID] > 1 {
+			for suffix := seenActionIDs[baseID]; ; suffix++ {
+				candidate := fmt.Sprintf("%s_%d", baseID, suffix)
+				if seenActionIDs[candidate] == 0 {
+					action.ID = candidate
+					break
+				}
+			}
+		}
+		seenActionIDs[action.ID] = 1
 		actions = append(actions, action)
 	}
 	analysis.RecommendedActions = actions

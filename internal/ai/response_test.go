@@ -54,3 +54,32 @@ func TestNormalizeAnalysisResponseRejectsInvalidJSON(t *testing.T) {
 		t.Fatal("expected invalid JSON to fail")
 	}
 }
+
+func TestNormalizeAnalysisResponseDeduplicatesActionIDs(t *testing.T) {
+	raw := `{
+		"status": "Healthy",
+		"summary": "ok",
+		"detailedAnalysis": "ok",
+		"recommendedActions": [
+			{"id": "restart_2", "command": "systemctl status a", "description": "inspect a"},
+			{"id": "restart", "command": "systemctl restart a", "description": "restart a"},
+			{"id": "restart", "command": "systemctl restart b", "description": "restart b"}
+		]
+	}`
+
+	normalized, err := NormalizeAnalysisResponse(raw)
+	if err != nil {
+		t.Fatalf("expected normalization to succeed: %v", err)
+	}
+
+	var analysis models.AIAnalysis
+	if err := json.Unmarshal([]byte(normalized), &analysis); err != nil {
+		t.Fatalf("expected normalized JSON: %v", err)
+	}
+	if analysis.RecommendedActions[1].ID == analysis.RecommendedActions[2].ID {
+		t.Fatalf("expected unique action IDs, got %+v", analysis.RecommendedActions)
+	}
+	if analysis.RecommendedActions[2].ID != "restart_3" {
+		t.Fatalf("expected collision-aware duplicate action suffix, got %q", analysis.RecommendedActions[2].ID)
+	}
+}
