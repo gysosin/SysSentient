@@ -211,7 +211,7 @@ func formatTopProcesses(processes []models.Process) string {
 
 	result := make([]string, 0, len(processes))
 	for _, p := range processes {
-		result = append(result, fmt.Sprintf("%s (%.1f%%, %dMB, %s)", p.Name, p.CPU, p.Memory, p.User))
+		result = append(result, fmt.Sprintf("%s (%.1f%%, %dMB)", p.Name, p.CPU, p.Memory))
 	}
 	return strings.Join(result, ", ")
 }

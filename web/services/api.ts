@@ -219,19 +219,19 @@ function normalizeProcessState(state: unknown): Process['state'] {
 }
 
 function parseProcesses(procStr: string): Process[] {
-    // Format: "name (cpu%, memoryMB, user), name (cpu%, memoryMB, user)"
-    // Example: "chrome (12.5%, 512MB, alice), code (5.0%, 256MB, alice)"
+    // Format: "name (cpu%, memoryMB)" with legacy support for ", user".
+    // Example: "chrome (12.5%, 512MB), code (5.0%, 256MB)"
     if (!procStr || procStr === "None") return [];
 
     const processes: Process[] = [];
-    const processPattern = /(.+?) \(([\d.]+)%, (\d+)MB, ([^)]+)\)(?:, |$)/g;
+    const processPattern = /(.+?) \(([\d.]+)%, (\d+)MB(?:, ([^)]+))?\)(?:, |$)/g;
     let match: RegExpExecArray | null;
 
     while ((match = processPattern.exec(procStr)) !== null) {
         processes.push({
             pid: 1000 + processes.length, // Backend currently exposes a summary string, not PID.
             name: match[1],
-            user: match[4],
+            user: match[4] || '?',
             cpu: parseFloat(match[2]),
             memory: parseInt(match[3], 10),
             state: 'Running'
