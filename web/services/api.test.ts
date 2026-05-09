@@ -85,3 +85,35 @@ test('fetchMetricsHistory replaces non-finite metric numbers with safe defaults'
   assert.equal(metrics[0].diskIOPS, 0);
   assert.equal(metrics[0].loadAvg1, 0);
 });
+
+test('fetchMetricsHistory replaces non-finite process numbers with safe defaults', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify([
+    {
+      timestamp: '2026-05-09T10:15:30Z',
+      processes: [
+        {
+          pid: 'bad-pid',
+          name: '',
+          user: '',
+          cpu: 'Infinity',
+          memory: 'Infinity',
+          state: 'Blocked',
+        },
+      ],
+    },
+  ]), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const { processes } = await fetchMetricsHistory();
+
+  assert.deepEqual(processes, [{
+    pid: 0,
+    name: '?',
+    user: '?',
+    cpu: 0,
+    memory: 0,
+    state: 'Running',
+  }]);
+});

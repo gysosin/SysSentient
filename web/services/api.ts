@@ -194,11 +194,11 @@ export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
 
 function normalizeProcess(process: RawProcess): Process {
     return {
-        pid: Number(process.pid) || 0,
-        name: String(process.name || '?'),
-        user: String(process.user || '?'),
-        cpu: Number(process.cpu) || 0,
-        memory: Number(process.memory) || 0,
+        pid: Math.max(0, Math.trunc(finiteNumber(process.pid))),
+        name: nonEmptyString(process.name, '?'),
+        user: nonEmptyString(process.user, '?'),
+        cpu: finiteNumber(process.cpu),
+        memory: finiteNumber(process.memory),
         state: normalizeProcessState(process.state)
     };
 }
