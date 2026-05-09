@@ -6,16 +6,53 @@ interface LogsResponse {
     content?: string;
 }
 
+interface RawProcess {
+    pid?: number;
+    name?: string;
+    user?: string;
+    cpu?: number;
+    memory?: number;
+    state?: unknown;
+}
+
+interface RawSystemState {
+    timestamp: string;
+    cpu_usage?: number;
+    cpu_per_core?: number[];
+    memory_used?: number;
+    memory_total?: number;
+    swap_used?: number;
+    swap_total?: number;
+    temperature?: number;
+    disk_read_bytes?: number;
+    disk_write_bytes?: number;
+    disk_iops?: number;
+    net_recv_bytes?: number;
+    net_sent_bytes?: number;
+    load_avg_1?: number;
+    load_avg_5?: number;
+    load_avg_15?: number;
+    processes?: RawProcess[];
+    top_processes?: string;
+}
+
+interface InsightRecord {
+    content?: string;
+}
+
 export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
     try {
         const response = await fetch(`${API_BASE_URL}/metrics`, {
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch metrics');
-        const rawData = await response.json(); // Array of models.SystemState
+        const rawData = await response.json() as RawSystemState[]; // Array of models.SystemState
+        if (!Array.isArray(rawData)) {
+            return { metrics: [], processes: [] };
+        }
 
         // rawData is ordered DESC (newest first).
-        const sorted = rawData.reverse(); // Now Oldest -> Newest
+        const sorted = [...rawData].reverse(); // Now Oldest -> Newest
 
         const metrics: SystemMetrics[] = [];
         let latestProcesses: Process[] = [];
@@ -87,7 +124,7 @@ export const triggerAnalysis = async (): Promise<AIAnalysisResult | null> => {
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Failed to analyze');
-        const data = await response.json();
+        const data = await response.json() as Partial<AIAnalysisResult>;
 
         // Data should be the AIAnalysis object
         return {
@@ -108,9 +145,9 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch insights');
-        const data = await response.json(); // Array of {timestamp, content}
+        const data = await response.json() as InsightRecord[]; // Array of {timestamp, content}
 
-        if (data && data.length > 0) {
+        if (Array.isArray(data) && data.length > 0 && data[0].content) {
             // Content is a JSON string now
             try {
                 const parsed = JSON.parse(data[0].content);
@@ -152,7 +189,7 @@ export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
     }
 }
 
-function normalizeProcess(process: any): Process {
+function normalizeProcess(process: RawProcess): Process {
     return {
         pid: Number(process.pid) || 0,
         name: String(process.name || '?'),
