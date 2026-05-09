@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -44,7 +46,7 @@ func (a *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 			}
 		}
 
-		if providedKey != a.apiKey {
+		if !a.validAPIKey(providedKey) {
 			http.Error(w, "Unauthorized: Invalid or missing API key", http.StatusUnauthorized)
 			return
 		}
@@ -58,4 +60,14 @@ func (a *AuthMiddleware) AuthenticateFunc(next http.HandlerFunc) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		a.Authenticate(next).ServeHTTP(w, r)
 	}
+}
+
+func (a *AuthMiddleware) validAPIKey(providedKey string) bool {
+	if providedKey == "" || a.apiKey == "" {
+		return false
+	}
+
+	expectedHash := sha256.Sum256([]byte(a.apiKey))
+	providedHash := sha256.Sum256([]byte(providedKey))
+	return subtle.ConstantTimeCompare(expectedHash[:], providedHash[:]) == 1
 }

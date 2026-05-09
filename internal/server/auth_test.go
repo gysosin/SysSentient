@@ -77,3 +77,18 @@ func TestAuthMiddlewareKeepsHealthPublic(t *testing.T) {
 		t.Fatalf("expected health check to stay public, got %d", rec.Code)
 	}
 }
+
+func TestAuthMiddlewareRejectsSimilarAPIKey(t *testing.T) {
+	auth := NewAuthMiddleware("expected-key")
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics", nil)
+	req.Header.Set("X-API-Key", "expected-key-extra")
+	rec := httptest.NewRecorder()
+
+	auth.AuthenticateFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected similar key to be rejected, got %d", rec.Code)
+	}
+}
