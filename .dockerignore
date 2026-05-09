@@ -1,0 +1,15 @@
+.git
+.github
+.env
+*.db
+*.db-shm
+*.db-wal
+*.log
+sys-daemon
+sys-sentient
+node_modules
+web/node_modules
+web/dist
+dist
+coverage
+tmp

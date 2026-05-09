@@ -28,6 +28,15 @@ cd ..
 go build -o sys-daemon ./cmd/daemon
 ```
 
+### Container Image
+```bash
+docker build -t sys-sentient .
+docker run --rm -p 8080:8080 \
+  -e SYS_SENTIENT_SERVER_API_KEY="your_dashboard_key" \
+  -e SYS_SENTIENT_GEMINI_API_KEY="your_api_key" \
+  sys-sentient
+```
+
 ## Running
 
 Ensure `web/dist` exists (from step 1).
