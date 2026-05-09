@@ -1,5 +1,5 @@
 # Logs
-logs
+/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -16,6 +16,7 @@ dist-ssr
 sys-daemon
 *.db
 sys-sentient
+.env
 
 # Editor directories and files
 .vscode/*
