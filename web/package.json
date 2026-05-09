@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "tsc -p tsconfig.test.json && node --test .tmp-tests/**/*.test.js",
+    "test": "rm -rf .tmp-tests && tsc -p tsconfig.test.json && node --test .tmp-tests/**/*.test.js; status=$?; rm -rf .tmp-tests; exit $status",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"
