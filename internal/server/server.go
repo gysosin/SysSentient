@@ -220,6 +220,7 @@ func (s *Server) enableCORS(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 
 		if origin != "" {
+			w.Header().Add("Vary", "Origin")
 			if !s.isOriginAllowed(origin) {
 				if r.Method == http.MethodOptions {
 					writeJSONError(w, http.StatusForbidden, "origin not allowed")

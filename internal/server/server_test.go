@@ -85,6 +85,24 @@ func TestCORSRejectsDisallowedPreflightOrigin(t *testing.T) {
 	}
 }
 
+func TestCORSMarksOriginVaryForOriginRequests(t *testing.T) {
+	srv := NewServer(config.ServerConfig{
+		AllowedOrigins: []string{"http://localhost:8080"},
+	}, nil, nil)
+	handler := srv.enableCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics", nil)
+	req.Header.Set("Origin", "http://localhost:8080")
+	handler.ServeHTTP(rec, req)
+
+	if rec.Header().Get("Vary") != "Origin" {
+		t.Fatalf("expected Vary: Origin, got %q", rec.Header().Get("Vary"))
+	}
+}
+
 func TestServerWebSocketAPIKeyUsesAuthValidator(t *testing.T) {
 	srv := NewServer(config.ServerConfig{
 		APIKey: "expected-key",
