@@ -2,9 +2,31 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { SystemMetrics } from '../types';
 import { metricsWebSocketURL } from '../constants';
 
-interface WSMessage {
-    type: 'metrics' | 'alert' | 'prediction';
-    payload: any;
+interface RawMetricsPayload {
+    timestamp: string;
+    cpu_usage?: number;
+    cpu_per_core?: number[];
+    memory_used?: number;
+    memory_total?: number;
+    swap_used?: number;
+    swap_total?: number;
+    disk_read_bytes?: number;
+    disk_write_bytes?: number;
+    disk_iops?: number;
+    net_recv_bytes?: number;
+    net_sent_bytes?: number;
+    load_avg_1?: number;
+    load_avg_5?: number;
+    load_avg_15?: number;
+    temperature?: number;
+}
+
+type WSMessage = {
+    type: 'metrics';
+    payload: RawMetricsPayload;
+} | {
+    type: 'alert' | 'prediction';
+    payload: unknown;
 }
 
 interface UseWebSocketReturn {
@@ -33,7 +55,7 @@ export function useWebSocket(): UseWebSocketReturn {
     const reconnectAttemptsRef = useRef(0);
     const lastCountersRef = useRef<RawCounters | null>(null);
 
-    const parseMetrics = useCallback((payload: any): SystemMetrics => {
+    const parseMetrics = useCallback((payload: RawMetricsPayload): SystemMetrics => {
         const t1 = new Date(payload.timestamp).getTime();
         const currentCounters: RawCounters = {
             timestamp: t1,
