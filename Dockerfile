@@ -9,6 +9,7 @@ RUN npm ci
 COPY web/ ./
 RUN npm run typecheck \
     && npm audit --audit-level=moderate \
+    && npm test \
     && npm run build
 
 FROM golang:1.25-bookworm AS go-builder
