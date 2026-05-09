@@ -34,10 +34,13 @@ Ensure `web/dist` exists (from step 1).
 
 ```bash
 export SYS_SENTIENT_GEMINI_API_KEY="your_api_key"
+export SYS_SENTIENT_SERVER_API_KEY="your_dashboard_key" # recommended
 ./sys-daemon
 ```
 
 Access the dashboard at `http://localhost:8080`.
+If API authentication is enabled, build the web UI with
+`VITE_SYS_SENTIENT_API_KEY` set to the same dashboard key.
 
 ## Configuration
 
@@ -46,8 +49,10 @@ Configuration can be set via `config.yaml` or Environment Variables.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SYS_SENTIENT_SERVER_PORT` | 8080 | Web Server Port |
-| `SYS_SENTIENT_GEMINI_API_KEY` | - | **Required** Gemini API Key |
-| `SYS_SENTIENT_GEMINI_MODEL_NAME` | gemini-1.5-flash | AI Model |
+| `SYS_SENTIENT_SERVER_API_KEY` | - | Optional API key for `/api/*` and `/ws/*` |
+| `SYS_SENTIENT_SERVER_ALLOWED_ORIGINS` | `http://localhost:8080,http://localhost:5173` | CORS/WebSocket origin allowlist |
+| `SYS_SENTIENT_GEMINI_API_KEY` | - | Gemini API key; AI is disabled when omitted |
+| `SYS_SENTIENT_GEMINI_MODEL_NAME` | gemini-2.5-flash-lite | AI Model |
 | `SYS_SENTIENT_COLLECTOR_POLL_INTERVAL_SECONDS` | 2 | Metrics Poll Rate |
 
 ## Installation (Linux Systemd)
@@ -67,7 +72,7 @@ Configuration can be set via `config.yaml` or Environment Variables.
 
 ## Features
 
-- Real-time CPU, Memory, Disk, Network metrics.
-- Top processes list.
+- Real-time CPU, memory, swap, disk, network, load, and temperature metrics.
+- Top processes list with CPU, memory, and user context.
 - **AI Analysis**: Detects anomalies and provides health summaries using Gemini AI.
 - PII Scrubbing: Automatically redacts sensitive info (IPs, Emails) before sending to AI.
