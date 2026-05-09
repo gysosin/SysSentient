@@ -129,22 +129,28 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
 }
 
 function parseProcesses(procStr: string): Process[] {
-    // Format: "name (cpu%), name (cpu%)"
-    // Example: "chrome (12.5%), code (5.0%)"
+    // Format: "name (cpu%, memoryMB, user), name (cpu%, memoryMB, user)"
+    // Example: "chrome (12.5%, 512MB, alice), code (5.0%, 256MB, alice)"
     if (!procStr || procStr === "None") return [];
 
-    return procStr.split(', ').map((p, idx) => {
-        const parts = p.match(/(.+) \(([\d.]+)%\)/);
-        if (parts) {
-            return {
-                pid: 1000 + idx, // Mock PID
-                name: parts[1],
-                user: 'root', // Mock user
-                cpu: parseFloat(parts[2]),
-                memory: 0, // Mock memory
-                state: 'Running'
-            };
-        }
+    const processes: Process[] = [];
+    const processPattern = /(.+?) \(([\d.]+)%, (\d+)MB, ([^)]+)\)(?:, |$)/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = processPattern.exec(procStr)) !== null) {
+        processes.push({
+            pid: 1000 + processes.length, // Backend currently exposes a summary string, not PID.
+            name: match[1],
+            user: match[4],
+            cpu: parseFloat(match[2]),
+            memory: parseInt(match[3], 10),
+            state: 'Running'
+        });
+    }
+
+    if (processes.length > 0) return processes;
+
+    return procStr.split(', ').map((p) => {
         return {
             pid: 0, name: p, user: '?', cpu: 0, memory: 0, state: 'Running'
         };
