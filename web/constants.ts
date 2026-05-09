@@ -19,9 +19,6 @@ export const metricsWebSocketURL = (): string => {
   return url.toString();
 };
 
-// Gemini Model
-export const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-
 // PII Scrubbing Patterns
 export const PII_PATTERNS = {
   IPV4: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,

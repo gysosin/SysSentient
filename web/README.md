@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# SysSentient Web Dashboard
 
-# Run and deploy your AI Studio app
+React/Vite frontend for the SysSentient daemon.
 
-This contains everything you need to run your app locally.
+## Local Development
 
-View your app in AI Studio: https://ai.studio/apps/drive/1JBKhDRrfzIoswsU_TTzbvuRjnZAXzbqN
+```bash
+npm install
+npm run dev
+```
 
-## Run Locally
+The dev server runs on port `3000` and talks to the daemon API at
+`http://localhost:8080` by default.
 
-**Prerequisites:**  Node.js
+## Build-Time Configuration
 
+Only expose dashboard connection settings with `VITE_` variables:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+VITE_SYS_SENTIENT_API_URL=http://localhost:8080/api
+VITE_SYS_SENTIENT_WS_URL=ws://localhost:8080/ws/metrics
+VITE_SYS_SENTIENT_API_KEY=your-dashboard-key
+```
+
+Provider secrets such as `SYS_SENTIENT_GEMINI_API_KEY` must stay server-side in
+the Go daemon environment.
+
+## Validation
+
+```bash
+npm audit --audit-level=moderate
+npm run build
+```
