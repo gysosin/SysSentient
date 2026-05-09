@@ -5,8 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sys-sentient/internal/config"
+	"sys-sentient/internal/storage"
 	"testing"
 	"time"
 )
@@ -70,6 +72,39 @@ func TestServerWebSocketAPIKeyUsesAuthValidator(t *testing.T) {
 	}
 	if srv.validWebSocketAPIKey("expected-key-extra") {
 		t.Fatal("expected similar WebSocket API key to be rejected")
+	}
+}
+
+func TestHandleHealthReportsStorageStatus(t *testing.T) {
+	store, err := storage.NewStore(filepath.Join(t.TempDir(), "health.db"))
+	if err != nil {
+		t.Fatalf("failed to create test store: %v", err)
+	}
+
+	srv := NewServer(config.ServerConfig{}, store, nil)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	srv.handleHealth(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected healthy status 200, got %d", rec.Code)
+	}
+	var healthy map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &healthy); err != nil {
+		t.Fatalf("expected JSON health response: %v", err)
+	}
+	if healthy["database"] != "ok" {
+		t.Fatalf("expected database status ok, got %q", healthy["database"])
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close test store: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	srv.handleHealth(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected unhealthy status 503, got %d", rec.Code)
 	}
 }
 

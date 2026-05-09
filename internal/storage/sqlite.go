@@ -241,3 +241,10 @@ func (s *Store) GetRecentInsights(limit int) ([]Insight, error) {
 func (s *Store) Close() error {
 	return s.db.Close()
 }
+
+func (s *Store) Ping() error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("store is not initialized")
+	}
+	return s.db.Ping()
+}

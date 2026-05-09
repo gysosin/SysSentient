@@ -104,9 +104,26 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	response := map[string]string{
+		"status":   "healthy",
+		"service":  "sys-sentient",
+		"database": "not_configured",
+	}
+	statusCode := http.StatusOK
+
+	if s.store != nil {
+		if err := s.store.Ping(); err != nil {
+			response["status"] = "unhealthy"
+			response["database"] = "unavailable"
+			statusCode = http.StatusServiceUnavailable
+		} else {
+			response["database"] = "ok"
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"healthy","service":"sys-sentient"}`))
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
