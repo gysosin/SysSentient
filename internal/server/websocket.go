@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,11 +107,21 @@ func (h *Hub) ClientCount() int {
 	return len(h.clients)
 }
 
+type websocketOriginValidatedKey struct{}
+
+func markWebSocketOriginValidated(r *http.Request) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), websocketOriginValidatedKey{}, true))
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for development
+		if r.Header.Get("Origin") == "" {
+			return true
+		}
+		validated, _ := r.Context().Value(websocketOriginValidatedKey{}).(bool)
+		return validated
 	},
 }
 

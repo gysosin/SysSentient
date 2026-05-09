@@ -69,6 +69,7 @@ func (s *Server) Start() error {
 			writeJSONError(w, http.StatusUnauthorized, "invalid or missing API key")
 			return
 		}
+		r = markWebSocketOriginValidated(r)
 		ServeWs(s.Hub, w, r)
 	})
 
