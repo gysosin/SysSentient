@@ -14,8 +14,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.Server.Port != 8080 {
 		t.Errorf("Expected default port 8080, got %d", cfg.Server.Port)
 	}
-	if cfg.Gemini.ModelName != "gemini-1.5-flash" {
-		t.Errorf("Expected default model gemini-1.5-flash, got %s", cfg.Gemini.ModelName)
+	if cfg.Gemini.ModelName != "gemini-2.5-flash-lite" {
+		t.Errorf("Expected default model gemini-2.5-flash-lite, got %s", cfg.Gemini.ModelName)
 	}
 }
 

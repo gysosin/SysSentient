@@ -16,7 +16,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port int `mapstructure:"port"`
+	Port            int      `mapstructure:"port"`
+	APIKey          string   `mapstructure:"api_key"`
+	AllowedOrigins  []string `mapstructure:"allowed_origins"`
 }
 
 type DatabaseConfig struct {
@@ -44,8 +46,11 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Set defaults
 	v.SetDefault("server.port", 8080)
+	v.SetDefault("server.api_key", "")
+	v.SetDefault("server.allowed_origins", []string{"http://localhost:8080", "http://localhost:5173"})
 	v.SetDefault("database.path", "sys-sentient.db")
-	v.SetDefault("gemini.model_name", "gemini-1.5-flash")
+	v.SetDefault("gemini.api_key", "") // Ensure env var is picked up
+	v.SetDefault("gemini.model_name", "gemini-2.5-flash-lite")
 	v.SetDefault("gemini.max_daily_cost", 1.0)
 	v.SetDefault("privacy.mask_ips", true)
 	v.SetDefault("privacy.mask_emails", true)
@@ -79,5 +84,40 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("unable to decode into struct: %w", err)
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return &cfg, nil
+}
+
+// Validate validates the configuration
+func (c *Config) Validate() error {
+	if c.Server.Port < 1 || c.Server.Port > 65535 {
+		return fmt.Errorf("invalid server port: %d (must be 1-65535)", c.Server.Port)
+	}
+
+	if c.Collector.PollIntervalSeconds < 1 {
+		return fmt.Errorf("poll interval must be at least 1 second, got %d", c.Collector.PollIntervalSeconds)
+	}
+
+	if c.Collector.PollIntervalSeconds > 3600 {
+		return fmt.Errorf("poll interval too large: %d seconds (max 3600)", c.Collector.PollIntervalSeconds)
+	}
+
+	if c.Database.Path == "" {
+		return fmt.Errorf("database path cannot be empty")
+	}
+
+	if c.Gemini.MaxDailyCost < 0 {
+		return fmt.Errorf("max daily cost cannot be negative: %.2f", c.Gemini.MaxDailyCost)
+	}
+
+	// Gemini API key is optional, but warn if model is set without key
+	if c.Gemini.APIKey == "" && c.Gemini.ModelName != "" {
+		fmt.Println("Warning: Gemini model configured but API key is missing")
+	}
+
+	return nil
 }
