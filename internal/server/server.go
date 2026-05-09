@@ -50,6 +50,11 @@ func (s *Server) Start() error {
 
 	// WebSocket endpoint for real-time metrics (protected)
 	mux.HandleFunc("GET /ws/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if !s.isOriginAllowed(r.Header.Get("Origin")) {
+			http.Error(w, "Forbidden: origin not allowed", http.StatusForbidden)
+			return
+		}
+
 		// Note: WebSocket auth via query param for compatibility
 		if s.authMiddleware.enabled {
 			apiKey := r.URL.Query().Get("api_key")
@@ -158,16 +163,7 @@ func (s *Server) enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		// Check if origin is allowed
-		allowed := false
-		for _, allowedOrigin := range s.config.AllowedOrigins {
-			if allowedOrigin == "*" || allowedOrigin == origin {
-				allowed = true
-				break
-			}
-		}
-
-		if allowed {
+		if origin != "" && s.isOriginAllowed(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
 
@@ -182,4 +178,17 @@ func (s *Server) enableCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) isOriginAllowed(origin string) bool {
+	if origin == "" {
+		return true
+	}
+
+	for _, allowedOrigin := range s.config.AllowedOrigins {
+		if allowedOrigin == "*" || allowedOrigin == origin {
+			return true
+		}
+	}
+	return false
 }
