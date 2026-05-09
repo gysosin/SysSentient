@@ -31,7 +31,7 @@ func (a *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 		}
 
 		// Allow public endpoints (health check, static files)
-		if r.URL.Path == "/health" || !strings.HasPrefix(r.URL.Path, "/api") && !strings.HasPrefix(r.URL.Path, "/ws") {
+		if r.URL.Path == "/health" || !isProtectedRouteNamespace(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -70,4 +70,8 @@ func (a *AuthMiddleware) validAPIKey(providedKey string) bool {
 	expectedHash := sha256.Sum256([]byte(a.apiKey))
 	providedHash := sha256.Sum256([]byte(providedKey))
 	return subtle.ConstantTimeCompare(expectedHash[:], providedHash[:]) == 1
+}
+
+func isProtectedRouteNamespace(path string) bool {
+	return path == "/api" || strings.HasPrefix(path, "/api/") || path == "/ws" || strings.HasPrefix(path, "/ws/")
 }

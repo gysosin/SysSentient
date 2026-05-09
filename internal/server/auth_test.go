@@ -87,6 +87,20 @@ func TestAuthMiddlewareKeepsHealthPublic(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareKeepsSimilarStaticPrefixesPublic(t *testing.T) {
+	auth := NewAuthMiddleware("expected-key")
+	req := httptest.NewRequest(http.MethodGet, "/apiary/logo.svg", nil)
+	rec := httptest.NewRecorder()
+
+	auth.AuthenticateFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected non-API static path to stay public, got %d", rec.Code)
+	}
+}
+
 func TestAuthMiddlewareRejectsSimilarAPIKey(t *testing.T) {
 	auth := NewAuthMiddleware("expected-key")
 	req := httptest.NewRequest(http.MethodGet, "/api/metrics", nil)
