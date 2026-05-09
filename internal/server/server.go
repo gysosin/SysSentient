@@ -59,13 +59,13 @@ func (s *Server) Start() error {
 	// WebSocket endpoint for real-time metrics (protected)
 	mux.HandleFunc("GET /ws/metrics", func(w http.ResponseWriter, r *http.Request) {
 		if !s.isOriginAllowed(r.Header.Get("Origin")) {
-			http.Error(w, "Forbidden: origin not allowed", http.StatusForbidden)
+			writeJSONError(w, http.StatusForbidden, "origin not allowed")
 			return
 		}
 
 		// Note: WebSocket auth via query param for compatibility
 		if !s.validWebSocketAPIKey(r.URL.Query().Get("api_key")) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			writeJSONError(w, http.StatusUnauthorized, "invalid or missing API key")
 			return
 		}
 		ServeWs(s.Hub, w, r)
@@ -136,7 +136,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics, err := s.store.GetRecent(50)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -146,7 +146,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 	insights, err := s.store.GetRecentInsights(10)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to load insights")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -155,13 +155,13 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	if s.logReader == nil {
-		http.Error(w, "Log reader not initialized", http.StatusServiceUnavailable)
+		writeJSONError(w, http.StatusServiceUnavailable, "log reader not initialized")
 		return
 	}
 
 	rawLogs, err := s.logReader.GetLogsWithTimeout(3 * time.Second)
 	if err != nil {
-		http.Error(w, "Failed to collect logs", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to collect logs")
 		return
 	}
 
@@ -174,14 +174,14 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	if s.aiService == nil {
-		http.Error(w, "AI Service not initialized", http.StatusServiceUnavailable)
+		writeJSONError(w, http.StatusServiceUnavailable, "AI service not initialized")
 		return
 	}
 
 	// Get latest state
 	states, err := s.store.GetRecent(1)
 	if err != nil || len(states) == 0 {
-		http.Error(w, "No metrics available", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "no metrics available")
 		return
 	}
 	state := states[0]
@@ -197,7 +197,7 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	insight, err := s.aiService.AnalyzeSystemState(r.Context(), state, logs)
 	if err != nil {
 		fmt.Printf("Error analyzing system state: %v\n", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "AI analysis failed")
 		return
 	}
 
@@ -266,4 +266,10 @@ func writeInsightResponse(w http.ResponseWriter, insight string) error {
 		"detailedAnalysis":   insight,
 		"recommendedActions": []map[string]any{},
 	})
+}
+
+func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

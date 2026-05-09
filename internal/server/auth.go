@@ -47,7 +47,7 @@ func (a *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 		}
 
 		if !a.validAPIKey(providedKey) {
-			http.Error(w, "Unauthorized: Invalid or missing API key", http.StatusUnauthorized)
+			writeJSONError(w, http.StatusUnauthorized, "invalid or missing API key")
 			return
 		}
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,6 +32,14 @@ func TestAuthMiddlewareRequiresAPIKeyForAPIRequests(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected unauthorized response, got %d", rec.Code)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON error response: %v", err)
+	}
+	if payload["error"] == "" {
+		t.Fatal("expected error message in JSON response")
 	}
 }
 

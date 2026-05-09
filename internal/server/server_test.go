@@ -185,4 +185,12 @@ func TestHandleLogsReportsCollectionFailure(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500, got %d", rec.Code)
 	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON error response: %v", err)
+	}
+	if payload["error"] != "failed to collect logs" {
+		t.Fatalf("expected sanitized log error, got %q", payload["error"])
+	}
 }
