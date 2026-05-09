@@ -92,7 +92,11 @@ Respond STRICTLY in JSON format with this structure:
 			return fmt.Errorf("failed to generate content: %w", apiErr)
 		}
 
-		result = resp.Text()
+		normalized, err := NormalizeAnalysisResponse(resp.Text())
+		if err != nil {
+			return err
+		}
+		result = normalized
 		return nil
 	})
 
