@@ -8,6 +8,10 @@ interface AIInsightPanelProps {
 }
 
 const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRefresh }) => {
+  const analysisId = React.useMemo(() => {
+    if (!analysis) return '';
+    return Math.random().toString(36).slice(2, 8).toUpperCase();
+  }, [analysis]);
 
   const getStatusColor = (status?: string) => {
     switch(status) {
@@ -94,7 +98,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
             <div className={`p-4 border-l-4 ${getStatusColor(analysis.status)} bg-black/40`}>
                <div className="flex items-center justify-between mb-2">
                  <h3 className="font-bold text-xl uppercase tracking-widest">{analysis.status}</h3>
-                 <span className="text-[10px] opacity-60">ID: {Math.random().toString(36).substr(2, 6).toUpperCase()}</span>
+                 <span className="text-[10px] opacity-60">ID: {analysisId}</span>
                </div>
                <p className="text-sm font-mono opacity-90">{analysis.summary}</p>
             </div>
