@@ -124,7 +124,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, loading, onRe
                     <div key={action.id} style={{animationDelay: `${idx * 100}ms`}} className="group animate-[fadeIn_0.5s_ease-out_forwards] opacity-0">
                       <div className={`
                         border border-gray-700 bg-gray-900/50 p-3
-                        hover:border-${action.isSafe ? 'neon-green' : 'neon-red'} transition-colors duration-300
+                        ${action.isSafe ? 'hover:border-neon-green' : 'hover:border-neon-red'} transition-colors duration-300
                       `}>
                         <div className="flex justify-between items-start mb-2">
                            <span className={`text-[10px] px-2 py-0.5 border ${action.isSafe ? 'border-neon-green text-neon-green' : 'border-neon-red text-neon-red'} uppercase tracking-wider`}>
