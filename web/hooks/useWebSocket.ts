@@ -29,6 +29,16 @@ type WSMessage = {
     payload: unknown;
 }
 
+function isMetricsMessage(value: unknown): value is Extract<WSMessage, { type: 'metrics' }> {
+    if (!value || typeof value !== 'object') return false;
+    const message = value as Record<string, unknown>;
+    if (message.type !== 'metrics' || !message.payload || typeof message.payload !== 'object') {
+        return false;
+    }
+    const payload = message.payload as Record<string, unknown>;
+    return typeof payload.timestamp === 'string';
+}
+
 interface UseWebSocketReturn {
     connected: boolean;
     latestMetrics: SystemMetrics | null;
@@ -119,8 +129,8 @@ export function useWebSocket(): UseWebSocketReturn {
 
             ws.onmessage = (event) => {
                 try {
-                    const msg: WSMessage = JSON.parse(event.data);
-                    if (msg.type === 'metrics') {
+                    const msg = JSON.parse(event.data) as unknown;
+                    if (isMetricsMessage(msg)) {
                         const metrics = parseMetrics(msg.payload);
                         setLatestMetrics(metrics);
                         setMetricsHistory(prev => {
