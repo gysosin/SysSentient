@@ -1,6 +1,8 @@
 import { SystemMetrics, AIAnalysisResult, Process, LogEntry } from '../types';
 import { API_BASE_URL, authHeaders } from '../constants';
 
+const API_REQUEST_TIMEOUT_MS = 8000;
+
 interface LogsResponse {
     collectedAt?: string;
     content?: string;
@@ -46,7 +48,7 @@ interface InsightRecord {
 
 export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/metrics`, {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/metrics`, {
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch metrics');
@@ -122,7 +124,7 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
 }
 
 export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
-    const response = await fetch(`${API_BASE_URL}/analyze`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/analyze`, {
         method: 'POST',
         headers: authHeaders(),
     });
@@ -143,7 +145,7 @@ export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
 
 export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/insights`, {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/insights`, {
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch insights');
@@ -178,7 +180,7 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
 
 export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/logs`, {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/logs`, {
             headers: authHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch logs');
@@ -200,6 +202,25 @@ function normalizeProcess(process: RawProcess): Process {
         memory: Number(process.memory) || 0,
         state: normalizeProcessState(process.state)
     };
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutID = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+    try {
+        return await fetch(input, {
+            ...init,
+            signal: controller.signal,
+        });
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error('Request timed out');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutID);
+    }
 }
 
 async function readAPIError(response: Response, fallback: string): Promise<string> {
