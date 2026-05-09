@@ -77,3 +77,26 @@ func TestLoadConfig_RetentionEnvOverride(t *testing.T) {
 		t.Fatalf("Expected insights retention override 336, got %d", cfg.Database.InsightsRetentionHours)
 	}
 }
+
+func TestConfigValidateRejectsInvalidRetention(t *testing.T) {
+	cfg := Config{
+		Server: ServerConfig{Port: 8080},
+		Database: DatabaseConfig{
+			Path:                   "sys-sentient.db",
+			MetricsRetentionHours:  24,
+			InsightsRetentionHours: 168,
+		},
+		Collector: CollectorConfig{PollIntervalSeconds: 2},
+	}
+
+	cfg.Database.MetricsRetentionHours = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected invalid metrics retention to fail")
+	}
+
+	cfg.Database.MetricsRetentionHours = 24
+	cfg.Database.InsightsRetentionHours = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected invalid insights retention to fail")
+	}
+}
