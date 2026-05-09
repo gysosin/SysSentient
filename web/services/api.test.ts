@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { fetchLatestInsight } from './api.js';
+import { fetchLatestInsight, fetchMetricsHistory } from './api.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -31,4 +31,30 @@ test('fetchLatestInsight normalizes malformed stored analysis JSON', async () =>
     detailedAnalysis: 'No details provided',
     recommendedActions: [],
   });
+});
+
+test('fetchMetricsHistory skips records with invalid timestamps', async () => {
+  const timestamp = '2026-05-09T10:15:30Z';
+  globalThis.fetch = async () => new Response(JSON.stringify([
+    {
+      timestamp: 'not-a-date',
+      cpu_usage: 99,
+      memory_total: 1024,
+    },
+    {
+      timestamp,
+      cpu_usage: 25,
+      memory_used: 512,
+      memory_total: 1024,
+    },
+  ]), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const { metrics } = await fetchMetricsHistory();
+
+  assert.equal(metrics.length, 1);
+  assert.equal(metrics[0].timestamp, Date.parse(timestamp));
+  assert.equal(metrics[0].cpuLoad, 25);
 });

@@ -64,27 +64,27 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
 
         const metrics: SystemMetrics[] = [];
         let latestProcesses: Process[] = [];
+        let previous: { state: RawSystemState; timestamp: number } | null = null;
 
-        for (let i = 0; i < sorted.length; i++) {
-            const curr = sorted[i];
-            const prev = i > 0 ? sorted[i - 1] : null;
-
+        for (const curr of sorted) {
             let diskReadRate = 0;
             let diskWriteRate = 0;
             let netRxRate = 0;
             let netTxRate = 0;
 
-            const t1 = new Date(curr.timestamp).getTime();
+            const t1 = Date.parse(curr.timestamp);
+            if (!Number.isFinite(t1)) {
+                continue;
+            }
 
-            if (prev) {
-                const t0 = new Date(prev.timestamp).getTime();
-                const dt = (t1 - t0) / 1000;
+            if (previous) {
+                const dt = (t1 - previous.timestamp) / 1000;
 
                 if (dt > 0) {
-                    diskReadRate = ((curr.disk_read_bytes ?? 0) - (prev.disk_read_bytes ?? 0)) / dt;
-                    diskWriteRate = ((curr.disk_write_bytes ?? 0) - (prev.disk_write_bytes ?? 0)) / dt;
-                    netRxRate = ((curr.net_recv_bytes ?? 0) - (prev.net_recv_bytes ?? 0)) / dt;
-                    netTxRate = ((curr.net_sent_bytes ?? 0) - (prev.net_sent_bytes ?? 0)) / dt;
+                    diskReadRate = ((curr.disk_read_bytes ?? 0) - (previous.state.disk_read_bytes ?? 0)) / dt;
+                    diskWriteRate = ((curr.disk_write_bytes ?? 0) - (previous.state.disk_write_bytes ?? 0)) / dt;
+                    netRxRate = ((curr.net_recv_bytes ?? 0) - (previous.state.net_recv_bytes ?? 0)) / dt;
+                    netTxRate = ((curr.net_sent_bytes ?? 0) - (previous.state.net_sent_bytes ?? 0)) / dt;
                 }
             }
 
@@ -107,14 +107,14 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
                 loadAvg15: curr.load_avg_15 || 0,
             });
 
-            // Parse processes from the latest entry.
-            if (i === sorted.length - 1) {
-                if (Array.isArray(curr.processes) && curr.processes.length > 0) {
-                    latestProcesses = curr.processes.map(normalizeProcess);
-                } else if (curr.top_processes) {
-                    latestProcesses = parseProcesses(curr.top_processes);
-                }
+            if (Array.isArray(curr.processes) && curr.processes.length > 0) {
+                latestProcesses = curr.processes.map(normalizeProcess);
+            } else if (curr.top_processes) {
+                latestProcesses = parseProcesses(curr.top_processes);
+            } else {
+                latestProcesses = [];
             }
+            previous = { state: curr, timestamp: t1 };
         }
 
         return { metrics, processes: latestProcesses };
