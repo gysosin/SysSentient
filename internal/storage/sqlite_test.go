@@ -280,6 +280,39 @@ func TestGetRecentDefaultsCorruptJSONColumnsToEmptySlices(t *testing.T) {
 	}
 }
 
+func TestGetRecentRejectsNonPositiveLimit(t *testing.T) {
+	dbPath := "test_limit.db"
+	defer os.Remove(dbPath)
+	defer os.Remove(dbPath + "-shm")
+	defer os.Remove(dbPath + "-wal")
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.Save(&models.SystemState{Timestamp: time.Now(), CPUUsage: 10, MemoryTotal: 1}); err != nil {
+		t.Fatalf("Failed to save metric: %v", err)
+	}
+
+	states, err := store.GetRecent(-1)
+	if err != nil {
+		t.Fatalf("GetRecent returned error: %v", err)
+	}
+	if len(states) != 0 {
+		t.Fatalf("Expected no metrics for negative limit, got %d", len(states))
+	}
+
+	insights, err := store.GetRecentInsights(0)
+	if err != nil {
+		t.Fatalf("GetRecentInsights returned error: %v", err)
+	}
+	if len(insights) != 0 {
+		t.Fatalf("Expected no insights for zero limit, got %d", len(insights))
+	}
+}
+
 func TestPruneOldMetrics(t *testing.T) {
 	dbPath := "test_prune.db"
 	defer os.Remove(dbPath)

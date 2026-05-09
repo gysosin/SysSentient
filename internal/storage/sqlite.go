@@ -192,6 +192,10 @@ func (s *Store) SaveInsight(content string) error {
 }
 
 func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
+	if limit < 1 {
+		return []models.SystemState{}, nil
+	}
+
 	query := `SELECT timestamp, cpu_usage, COALESCE(cpu_per_core, '[]'),
 		memory_used, memory_total, COALESCE(swap_used, 0), COALESCE(swap_total, 0),
 		disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
@@ -247,6 +251,10 @@ type Insight struct {
 }
 
 func (s *Store) GetRecentInsights(limit int) ([]Insight, error) {
+	if limit < 1 {
+		return []Insight{}, nil
+	}
+
 	query := `SELECT timestamp, content FROM insights ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
