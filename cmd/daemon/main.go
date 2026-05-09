@@ -106,6 +106,10 @@ func main() {
 			if err := store.PruneOldMetrics(24); err != nil {
 				log.Printf("Error pruning old metrics: %v", err)
 			}
+			// Keep AI insight history bounded while preserving useful recent context.
+			if err := store.PruneOldInsights(7 * 24); err != nil {
+				log.Printf("Error pruning old insights: %v", err)
+			}
 
 		case <-ticker.C:
 			// Collect

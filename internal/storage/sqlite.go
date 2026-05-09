@@ -178,6 +178,13 @@ func (s *Store) PruneOldMetrics(hours int) error {
 	return err
 }
 
+func (s *Store) PruneOldInsights(hours int) error {
+	query := `DELETE FROM insights WHERE timestamp < datetime('now', ?)`
+	modifier := fmt.Sprintf("-%d hours", hours)
+	_, err := s.db.Exec(query, modifier)
+	return err
+}
+
 func (s *Store) SaveInsight(content string) error {
 	query := `INSERT INTO insights (timestamp, content) VALUES (CURRENT_TIMESTAMP, ?)`
 	_, err := s.db.Exec(query, content)

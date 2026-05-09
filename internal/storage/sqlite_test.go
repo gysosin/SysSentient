@@ -277,3 +277,39 @@ func TestPruneOldMetrics(t *testing.T) {
 		t.Errorf("Expected 5 metrics after pruning recent data, got %d", len(states))
 	}
 }
+
+func TestPruneOldInsights(t *testing.T) {
+	dbPath := "test_prune_insights.db"
+	defer os.Remove(dbPath)
+	defer os.Remove(dbPath + "-shm")
+	defer os.Remove(dbPath + "-wal")
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	_, err = store.db.Exec(`
+		INSERT INTO insights (timestamp, content)
+		VALUES (datetime('now', '-8 days'), 'old insight'), (CURRENT_TIMESTAMP, 'new insight')
+	`)
+	if err != nil {
+		t.Fatalf("Failed to seed insights: %v", err)
+	}
+
+	if err := store.PruneOldInsights(7 * 24); err != nil {
+		t.Fatalf("Failed to prune old insights: %v", err)
+	}
+
+	insights, err := store.GetRecentInsights(10)
+	if err != nil {
+		t.Fatalf("Failed to read insights: %v", err)
+	}
+	if len(insights) != 1 {
+		t.Fatalf("Expected 1 insight after pruning, got %d", len(insights))
+	}
+	if insights[0].Content != "new insight" {
+		t.Fatalf("Expected new insight to remain, got %q", insights[0].Content)
+	}
+}
