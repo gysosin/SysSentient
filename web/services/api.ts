@@ -77,10 +77,10 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
                 const dt = (t1 - t0) / 1000;
 
                 if (dt > 0) {
-                    diskReadRate = (curr.disk_read_bytes - prev.disk_read_bytes) / dt;
-                    diskWriteRate = (curr.disk_write_bytes - prev.disk_write_bytes) / dt;
-                    netRxRate = (curr.net_recv_bytes - prev.net_recv_bytes) / dt;
-                    netTxRate = (curr.net_sent_bytes - prev.net_sent_bytes) / dt;
+                    diskReadRate = ((curr.disk_read_bytes ?? 0) - (prev.disk_read_bytes ?? 0)) / dt;
+                    diskWriteRate = ((curr.disk_write_bytes ?? 0) - (prev.disk_write_bytes ?? 0)) / dt;
+                    netRxRate = ((curr.net_recv_bytes ?? 0) - (prev.net_recv_bytes ?? 0)) / dt;
+                    netTxRate = ((curr.net_sent_bytes ?? 0) - (prev.net_sent_bytes ?? 0)) / dt;
                 }
             }
 
