@@ -29,8 +29,14 @@ const ProcessList: React.FC<ProcessListProps> = ({ processes }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/50">
-            {processes.map((proc) => (
-              <tr key={proc.pid} className="group hover:bg-neon-blue/5 transition-colors cursor-default">
+            {processes.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-xs uppercase tracking-widest text-gray-600">
+                  No process data available
+                </td>
+              </tr>
+            ) : processes.map((proc, idx) => (
+              <tr key={`${proc.pid}-${idx}`} className="group hover:bg-neon-blue/5 transition-colors cursor-default">
                 <td className="px-4 py-2 font-mono text-neon-blue/70 group-hover:text-neon-blue">{proc.pid}</td>
                 <td className="px-4 py-2 font-medium text-gray-200 group-hover:text-white group-hover:translate-x-1 transition-transform">{proc.name}</td>
                 <td className="px-4 py-2 text-xs">{proc.user}</td>
