@@ -45,3 +45,16 @@ func TestServerOriginPolicyAllowsEmptyOrigin(t *testing.T) {
 		t.Fatal("expected empty origin to be allowed for same-origin and non-browser clients")
 	}
 }
+
+func TestServerWebSocketAPIKeyUsesAuthValidator(t *testing.T) {
+	srv := NewServer(config.ServerConfig{
+		APIKey: "expected-key",
+	}, nil, nil)
+
+	if !srv.validWebSocketAPIKey("expected-key") {
+		t.Fatal("expected matching WebSocket API key to be accepted")
+	}
+	if srv.validWebSocketAPIKey("expected-key-extra") {
+		t.Fatal("expected similar WebSocket API key to be rejected")
+	}
+}

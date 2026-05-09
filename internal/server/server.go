@@ -56,12 +56,9 @@ func (s *Server) Start() error {
 		}
 
 		// Note: WebSocket auth via query param for compatibility
-		if s.authMiddleware.enabled {
-			apiKey := r.URL.Query().Get("api_key")
-			if apiKey != s.config.APIKey {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
+		if !s.validWebSocketAPIKey(r.URL.Query().Get("api_key")) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
 		}
 		ServeWs(s.Hub, w, r)
 	})
@@ -191,4 +188,11 @@ func (s *Server) isOriginAllowed(origin string) bool {
 		}
 	}
 	return false
+}
+
+func (s *Server) validWebSocketAPIKey(providedKey string) bool {
+	if !s.authMiddleware.enabled {
+		return true
+	}
+	return s.authMiddleware.validAPIKey(providedKey)
 }
