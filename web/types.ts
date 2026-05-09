@@ -28,7 +28,7 @@ export interface SystemMetrics {
 
 export interface LogEntry {
   timestamp: string;
-  facility: 'kernel' | 'systemd' | 'auth';
+  facility: string;
   level: 'INFO' | 'WARN' | 'ERROR';
   message: string;
 }

@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SystemMetrics, Process, LogEntry, AIAnalysisResult } from './types';
-import { fetchMetricsHistory, triggerAnalysis, fetchLatestInsight } from './services/api';
+import { fetchMetricsHistory, fetchRecentLogs, triggerAnalysis, fetchLatestInsight } from './services/api';
 import { useWebSocket } from './hooks/useWebSocket';
 import SystemChart from './components/SystemChart';
 import ProcessList from './components/ProcessList';
 import AIInsightPanel from './components/AIInsightPanel';
-import { REFRESH_RATE_MS } from './constants';
+import { LOG_REFRESH_RATE_MS, REFRESH_RATE_MS } from './constants';
+
+const logLevelClass = (level: LogEntry['level']) => {
+  if (level === 'ERROR') return 'text-neon-red';
+  if (level === 'WARN') return 'text-yellow-400';
+  return 'text-gray-400';
+};
 
 const App: React.FC = () => {
   const { connected, metricsHistory: wsMetricsHistory } = useWebSocket();
@@ -50,6 +56,20 @@ const App: React.FC = () => {
     const intervalId = setInterval(fetchData, REFRESH_RATE_MS);
     return () => clearInterval(intervalId);
   }, [connected]);
+
+  // Poll recent system logs at a slower cadence than metrics collection.
+  useEffect(() => {
+    const fetchLogs = async () => {
+      const recentLogs = await fetchRecentLogs();
+      if (recentLogs.length > 0) {
+        setLogs(recentLogs);
+      }
+    };
+
+    fetchLogs();
+    const intervalId = setInterval(fetchLogs, LOG_REFRESH_RATE_MS);
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Uptime counter
   useEffect(() => {
@@ -183,7 +203,16 @@ const App: React.FC = () => {
               <span className="ml-auto text-gray-600 text-[10px]">TAIL -F</span>
             </div>
             <div className="overflow-y-auto space-y-1 flex-grow scrollbar-hide">
-              <div className="text-gray-700 italic">Log streaming API pending...<span className="animate-pulse">_</span></div>
+              {logs.length === 0 ? (
+                <div className="text-gray-700 italic">Collecting recent system log signals<span className="animate-pulse">_</span></div>
+              ) : logs.map((log, idx) => (
+                <div key={`${log.timestamp}-${idx}`} className="grid grid-cols-[72px_1fr] gap-2">
+                  <span className={`${logLevelClass(log.level)} uppercase`}>{log.level}</span>
+                  <span className="text-gray-400 break-words">
+                    <span className="text-gray-600">[{log.facility}]</span> {log.message}
+                  </span>
+                </div>
+              ))}
               <div ref={logsEndRef} />
             </div>
           </div>

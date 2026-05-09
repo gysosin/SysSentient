@@ -19,10 +19,14 @@ type Server struct {
 	config         config.ServerConfig
 	aiService      *ai.AIService
 	Hub            *Hub
-	logReader      *logs.LogReader
+	logReader      logCollector
 	scrubber       *pii.Scrubber
 	authMiddleware *AuthMiddleware
 	httpServer     *http.Server
+}
+
+type logCollector interface {
+	GetLogsWithTimeout(time.Duration) (string, error)
 }
 
 func NewServer(cfg config.ServerConfig, store *storage.Store, aiService *ai.AIService) *Server {
@@ -49,6 +53,7 @@ func (s *Server) Start() error {
 	// Protected API endpoints
 	mux.HandleFunc("GET /api/metrics", s.authMiddleware.AuthenticateFunc(s.handleMetrics))
 	mux.HandleFunc("GET /api/insights", s.authMiddleware.AuthenticateFunc(s.handleInsights))
+	mux.HandleFunc("GET /api/logs", s.authMiddleware.AuthenticateFunc(s.handleLogs))
 	mux.HandleFunc("POST /api/analyze", s.authMiddleware.AuthenticateFunc(s.handleAnalyze))
 
 	// WebSocket endpoint for real-time metrics (protected)
@@ -129,6 +134,25 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(insights)
+}
+
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	if s.logReader == nil {
+		http.Error(w, "Log reader not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	rawLogs, err := s.logReader.GetLogsWithTimeout(3 * time.Second)
+	if err != nil {
+		http.Error(w, "Failed to collect logs", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"collectedAt": time.Now().UTC().Format(time.RFC3339),
+		"content":     s.scrubber.SanitizeLog(rawLogs),
+	})
 }
 
 func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {

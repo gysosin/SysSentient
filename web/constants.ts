@@ -1,5 +1,6 @@
 export const APP_NAME = "SysSentient";
 export const REFRESH_RATE_MS = 2000; // 2 seconds
+export const LOG_REFRESH_RATE_MS = 10000; // 10 seconds
 export const HISTORY_LENGTH = 30; // 60 seconds of history on chart
 
 export const API_BASE_URL = import.meta.env.VITE_SYS_SENTIENT_API_URL || 'http://localhost:8080/api';

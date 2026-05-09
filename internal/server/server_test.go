@@ -2,11 +2,23 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sys-sentient/internal/config"
 	"testing"
+	"time"
 )
+
+type fakeLogCollector struct {
+	content string
+	err     error
+}
+
+func (f fakeLogCollector) GetLogsWithTimeout(time.Duration) (string, error) {
+	return f.content, f.err
+}
 
 func TestNewHTTPServerSetsProductionTimeouts(t *testing.T) {
 	srv := newHTTPServer(":8080", http.NewServeMux())
@@ -94,5 +106,48 @@ func TestWriteInsightResponseWrapsPlainText(t *testing.T) {
 	}
 	if _, ok := payload["recommendedActions"].([]any); !ok {
 		t.Fatalf("expected recommendedActions array, got %T", payload["recommendedActions"])
+	}
+}
+
+func TestHandleLogsReturnsScrubbedContent(t *testing.T) {
+	srv := NewServer(config.ServerConfig{}, nil, nil)
+	srv.logReader = fakeLogCollector{
+		content: "May 09 kernel warning for admin@example.com from 10.0.0.8 in /home/alice/app",
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs", nil)
+	srv.handleLogs(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON logs response: %v", err)
+	}
+
+	content := payload["content"]
+	for _, sensitive := range []string{"admin@example.com", "10.0.0.8", "/home/alice"} {
+		if strings.Contains(content, sensitive) {
+			t.Fatalf("expected log content to redact %q, got %q", sensitive, content)
+		}
+	}
+	if !strings.Contains(content, "[EMAIL_REDACTED]") || !strings.Contains(content, "[IP_REDACTED]") {
+		t.Fatalf("expected redaction markers in log content, got %q", content)
+	}
+}
+
+func TestHandleLogsReportsCollectionFailure(t *testing.T) {
+	srv := NewServer(config.ServerConfig{}, nil, nil)
+	srv.logReader = fakeLogCollector{err: errors.New("journal unavailable")}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs", nil)
+	srv.handleLogs(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rec.Code)
 	}
 }

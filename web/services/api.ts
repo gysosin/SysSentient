@@ -1,5 +1,10 @@
-import { SystemMetrics, AIAnalysisResult, Process } from '../types';
+import { SystemMetrics, AIAnalysisResult, Process, LogEntry } from '../types';
 import { API_BASE_URL, authHeaders } from '../constants';
+
+interface LogsResponse {
+    collectedAt?: string;
+    content?: string;
+}
 
 export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
     try {
@@ -132,6 +137,21 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
     }
 }
 
+export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/logs`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok) throw new Error('Failed to fetch logs');
+
+        const data = await response.json() as LogsResponse;
+        return parseLogContent(data.content || '', data.collectedAt || new Date().toISOString());
+    } catch (e) {
+        console.error("API Error fetchRecentLogs", e);
+        return [];
+    }
+}
+
 function normalizeProcess(process: any): Process {
     return {
         pid: Number(process.pid) || 0,
@@ -177,4 +197,38 @@ function parseProcesses(procStr: string): Process[] {
             pid: 0, name: p, user: '?', cpu: 0, memory: 0, state: 'Running'
         };
     });
+}
+
+function parseLogContent(content: string, collectedAt: string): LogEntry[] {
+    return content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .slice(-80)
+        .map((line) => ({
+            timestamp: collectedAt,
+            facility: detectFacility(line),
+            level: detectLevel(line),
+            message: line,
+        }));
+}
+
+function detectFacility(line: string): string {
+    const lower = line.toLowerCase();
+    if (lower.includes('journal')) return 'systemd';
+    if (lower.includes('kernel') || lower.includes('dmesg')) return 'kernel';
+    if (lower.includes('auth') || lower.includes('sudo') || lower.includes('ssh')) return 'auth';
+    if (line.startsWith('===')) return 'source';
+    return 'system';
+}
+
+function detectLevel(line: string): LogEntry['level'] {
+    const lower = line.toLowerCase();
+    if (lower.includes('error') || lower.includes('fail') || lower.includes('critical') || lower.includes('panic')) {
+        return 'ERROR';
+    }
+    if (lower.includes('warn')) {
+        return 'WARN';
+    }
+    return 'INFO';
 }
