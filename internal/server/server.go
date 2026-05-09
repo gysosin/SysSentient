@@ -153,7 +153,9 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(insight))
+	if err := writeInsightResponse(w, insight); err != nil {
+		fmt.Printf("Error writing insight response: %v\n", err)
+	}
 }
 
 func (s *Server) enableCORS(next http.Handler) http.Handler {
@@ -195,4 +197,18 @@ func (s *Server) validWebSocketAPIKey(providedKey string) bool {
 		return true
 	}
 	return s.authMiddleware.validAPIKey(providedKey)
+}
+
+func writeInsightResponse(w http.ResponseWriter, insight string) error {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(insight), &payload); err == nil && payload != nil {
+		return json.NewEncoder(w).Encode(payload)
+	}
+
+	return json.NewEncoder(w).Encode(map[string]any{
+		"status":             "Warning",
+		"summary":            "AI Analysis Generated",
+		"detailedAnalysis":   insight,
+		"recommendedActions": []map[string]any{},
+	})
 }

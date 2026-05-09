@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"sys-sentient/internal/config"
 	"testing"
 )
@@ -56,5 +58,41 @@ func TestServerWebSocketAPIKeyUsesAuthValidator(t *testing.T) {
 	}
 	if srv.validWebSocketAPIKey("expected-key-extra") {
 		t.Fatal("expected similar WebSocket API key to be rejected")
+	}
+}
+
+func TestWriteInsightResponsePreservesJSONObject(t *testing.T) {
+	rec := httptest.NewRecorder()
+	raw := `{"status":"Healthy","summary":"ok","recommendedActions":[]}`
+
+	if err := writeInsightResponse(rec, raw); err != nil {
+		t.Fatalf("writeInsightResponse returned error: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected valid JSON response: %v", err)
+	}
+	if payload["status"] != "Healthy" {
+		t.Fatalf("expected status to be preserved, got %v", payload["status"])
+	}
+}
+
+func TestWriteInsightResponseWrapsPlainText(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	if err := writeInsightResponse(rec, "plain diagnostic text"); err != nil {
+		t.Fatalf("writeInsightResponse returned error: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected valid JSON response: %v", err)
+	}
+	if payload["detailedAnalysis"] != "plain diagnostic text" {
+		t.Fatalf("expected plain text to be wrapped, got %v", payload["detailedAnalysis"])
+	}
+	if _, ok := payload["recommendedActions"].([]any); !ok {
+		t.Fatalf("expected recommendedActions array, got %T", payload["recommendedActions"])
 	}
 }
