@@ -21,8 +21,7 @@ func main() {
 	// 1. Load Configuration
 	cfg, err := config.LoadConfig("")
 	if err != nil {
-		log.Printf("Warning: Failed to load config, using defaults: %v", err)
-		cfg, _ = config.LoadConfig("") // re-load defaults effectively
+		log.Fatalf("Failed to load config: %v", err)
 	}
 	fmt.Printf("Config loaded. Poll interval: %ds\n", cfg.Collector.PollIntervalSeconds)
 	fmt.Printf("Server Port: %d\n", cfg.Server.Port)
