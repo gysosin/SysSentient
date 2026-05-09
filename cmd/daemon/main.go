@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"sys-sentient/internal/collector"
 	"sys-sentient/internal/config"
 	"sys-sentient/internal/logs"
+	"sys-sentient/internal/models"
 	"sys-sentient/internal/pii"
 	"sys-sentient/internal/server"
 	"sys-sentient/internal/storage"
@@ -163,9 +166,8 @@ func main() {
 							return
 						}
 
-						fmt.Printf("🤖 AI Insight: %s\n", insight)
-						// Save is handled inside AnalyzeSystemState (RAG cache) or externally?
-						// Wait, RAG cache saves it to cache, but we also want to save to DB for history.
+						log.Println(formatInsightLogSummary(insight))
+						// Persist insight history for dashboard retrieval.
 						if err := store.SaveInsight(insight); err != nil {
 							log.Printf("Error saving insight: %v", err)
 						}
@@ -174,4 +176,29 @@ func main() {
 			}
 		}
 	}
+}
+
+func formatInsightLogSummary(raw string) string {
+	var analysis models.AIAnalysis
+	if err := json.Unmarshal([]byte(raw), &analysis); err != nil {
+		return "AI insight generated"
+	}
+
+	status := strings.TrimSpace(analysis.Status)
+	if status == "" {
+		status = "Unknown"
+	}
+	summary := compactLogText(analysis.Summary, 120)
+	if summary == "" {
+		return fmt.Sprintf("AI insight generated: status=%s actions=%d", status, len(analysis.RecommendedActions))
+	}
+	return fmt.Sprintf("AI insight generated: status=%s actions=%d summary=%q", status, len(analysis.RecommendedActions), summary)
+}
+
+func compactLogText(value string, maxLength int) string {
+	compact := strings.Join(strings.Fields(value), " ")
+	if len(compact) <= maxLength {
+		return compact
+	}
+	return compact[:maxLength] + "..."
 }
