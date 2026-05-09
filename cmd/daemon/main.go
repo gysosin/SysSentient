@@ -143,11 +143,7 @@ func main() {
 
 			// Check Triggers for AI Analysis
 			if aiService != nil {
-				// Trigger conditions: High CPU (>80%) or High Memory (>90%)
-				isHighCPU := state.CPUUsage > 80.0
-				isHighMem := float64(state.MemoryUsed)/float64(state.MemoryTotal) > 0.9
-
-				if (isHighCPU || isHighMem) && time.Since(lastAnalysisTime) > analysisCooldown {
+				if shouldTriggerAutomaticAnalysis(*state) && time.Since(lastAnalysisTime) > analysisCooldown {
 					fmt.Println("⚠️  Threshold Triggered! Requesting AI Analysis...")
 					lastAnalysisTime = time.Now()
 
@@ -176,6 +172,13 @@ func main() {
 			}
 		}
 	}
+}
+
+func shouldTriggerAutomaticAnalysis(state models.SystemState) bool {
+	if state.CPUUsage > 80.0 {
+		return true
+	}
+	return state.MemoryTotal > 0 && float64(state.MemoryUsed)/float64(state.MemoryTotal) > 0.9
 }
 
 func formatInsightLogSummary(raw string) string {
