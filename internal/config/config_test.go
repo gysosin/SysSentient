@@ -59,6 +59,25 @@ func TestLoadConfig_AllowedOriginsEnvOverride(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowedOriginsEnvOverrideTrimsEmptyEntries(t *testing.T) {
+	t.Setenv("SYS_SENTIENT_SERVER_ALLOWED_ORIGINS", " http://a.example , , http://b.example ")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	expected := []string{"http://a.example", "http://b.example"}
+	if len(cfg.Server.AllowedOrigins) != len(expected) {
+		t.Fatalf("Expected %d origins, got %d: %#v", len(expected), len(cfg.Server.AllowedOrigins), cfg.Server.AllowedOrigins)
+	}
+	for i := range expected {
+		if cfg.Server.AllowedOrigins[i] != expected[i] {
+			t.Fatalf("Expected origin %d to be %q, got %q", i, expected[i], cfg.Server.AllowedOrigins[i])
+		}
+	}
+}
+
 func TestLoadConfig_RetentionEnvOverride(t *testing.T) {
 	os.Setenv("SYS_SENTIENT_DATABASE_METRICS_RETENTION_HOURS", "48")
 	os.Setenv("SYS_SENTIENT_DATABASE_INSIGHTS_RETENTION_HOURS", "336")

@@ -87,6 +87,7 @@ func LoadConfig(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unable to decode into struct: %w", err)
 	}
+	cfg.Server.AllowedOrigins = normalizeStringList(cfg.Server.AllowedOrigins)
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
@@ -127,4 +128,15 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func normalizeStringList(values []string) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			normalized = append(normalized, value)
+		}
+	}
+	return normalized
 }
