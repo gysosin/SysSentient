@@ -219,13 +219,20 @@ func (s *Server) enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		if origin != "" && s.isOriginAllowed(origin) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
+		if origin != "" {
+			if !s.isOriginAllowed(origin) {
+				if r.Method == http.MethodOptions {
+					writeJSONError(w, http.StatusForbidden, "origin not allowed")
+					return
+				}
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 		}
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, Authorization")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

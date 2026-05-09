@@ -67,6 +67,24 @@ func TestServerOriginPolicyAllowsEmptyOrigin(t *testing.T) {
 	}
 }
 
+func TestCORSRejectsDisallowedPreflightOrigin(t *testing.T) {
+	srv := NewServer(config.ServerConfig{
+		AllowedOrigins: []string{"http://localhost:8080"},
+	}, nil, nil)
+	handler := srv.enableCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "/api/metrics", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected disallowed preflight status 403, got %d", rec.Code)
+	}
+}
+
 func TestServerWebSocketAPIKeyUsesAuthValidator(t *testing.T) {
 	srv := NewServer(config.ServerConfig{
 		APIKey: "expected-key",
