@@ -6,34 +6,62 @@ import (
 	"net/http"
 	"sys-sentient/internal/ai"
 	"sys-sentient/internal/config"
+	"sys-sentient/internal/logs"
+	"sys-sentient/internal/pii"
 	"sys-sentient/internal/storage"
+	"time"
 )
 
 type Server struct {
-	store     *storage.Store
-	config    config.ServerConfig
-	aiService *ai.AIService
+	store          *storage.Store
+	config         config.ServerConfig
+	aiService      *ai.AIService
+	Hub            *Hub
+	logReader      *logs.LogReader
+	scrubber       *pii.Scrubber
+	authMiddleware *AuthMiddleware
 }
 
 func NewServer(cfg config.ServerConfig, store *storage.Store, aiService *ai.AIService) *Server {
+	hub := NewHub()
+	go hub.Run()
+
 	return &Server{
-		store:     store,
-		config:    cfg,
-		aiService: aiService,
+		store:          store,
+		config:         cfg,
+		aiService:      aiService,
+		Hub:            hub,
+		logReader:      logs.NewLogReader(50),
+		scrubber:       pii.NewScrubber(true, true, true),
+		authMiddleware: NewAuthMiddleware(cfg.APIKey),
 	}
 }
 
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
-	// Using Go 1.22+ routing patterns
-	mux.HandleFunc("GET /api/metrics", s.handleMetrics)
-	mux.HandleFunc("GET /api/insights", s.handleInsights)
-	mux.HandleFunc("POST /api/analyze", s.handleAnalyze)
+	// Health check endpoint (public)
+	mux.HandleFunc("GET /health", s.handleHealth)
 
-	// Serve Static Files
-	// Check if directory exists or just serve.
-	// For Single Page App, might need to serve index.html on 404, but strict file server is okay for now.
+	// Protected API endpoints
+	mux.HandleFunc("GET /api/metrics", s.authMiddleware.AuthenticateFunc(s.handleMetrics))
+	mux.HandleFunc("GET /api/insights", s.authMiddleware.AuthenticateFunc(s.handleInsights))
+	mux.HandleFunc("POST /api/analyze", s.authMiddleware.AuthenticateFunc(s.handleAnalyze))
+
+	// WebSocket endpoint for real-time metrics (protected)
+	mux.HandleFunc("GET /ws/metrics", func(w http.ResponseWriter, r *http.Request) {
+		// Note: WebSocket auth via query param for compatibility
+		if s.authMiddleware.enabled {
+			apiKey := r.URL.Query().Get("api_key")
+			if apiKey != s.config.APIKey {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		ServeWs(s.Hub, w, r)
+	})
+
+	// Serve Static Files (public)
 	fs := http.FileServer(http.Dir("./web/dist"))
 	mux.Handle("/", fs)
 
@@ -41,7 +69,30 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("Starting API Server on %s\n", addr)
-	return http.ListenAndServe(addr, handler)
+	if s.authMiddleware.enabled {
+		fmt.Println("⚠️  Authentication enabled. API key required for protected endpoints.")
+	} else {
+		fmt.Println("⚠️  WARNING: No API key configured. Server is running without authentication!")
+	}
+	fmt.Printf("WebSocket endpoint: ws://localhost%s/ws/metrics\n", addr)
+	return newHTTPServer(addr, handler).ListenAndServe()
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      2 * time.Minute,
+		IdleTimeout:       60 * time.Second,
+	}
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"healthy","service":"sys-sentient"}`))
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
@@ -79,11 +130,16 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	state := states[0]
 
 	// Trigger analysis
-	// In real app we might want to read logs again.
-	logs := "Manual analysis request. No logs provided."
-	
+	// Collect real logs
+	rawLogs, err := s.logReader.GetLogsWithTimeout(5 * time.Second)
+	if err != nil {
+		rawLogs = "Failed to collect logs for manual analysis."
+	}
+	logs := s.scrubber.SanitizeLog(rawLogs)
+
 	insight, err := s.aiService.AnalyzeSystemState(r.Context(), state, logs)
 	if err != nil {
+		fmt.Printf("Error analyzing system state: %v\n", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -95,14 +151,29 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"insight": insight})
+	w.Write([]byte(insight))
 }
 
 func (s *Server) enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+
+		// Check if origin is allowed
+		allowed := false
+		for _, allowedOrigin := range s.config.AllowedOrigins {
+			if allowedOrigin == "*" || allowedOrigin == origin {
+				allowed = true
+				break
+			}
+		}
+
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
