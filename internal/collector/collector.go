@@ -182,7 +182,7 @@ func (c *Collector) getTopProcesses(limit int) ([]models.Process, error) {
 			}
 			stats = append(stats, models.Process{
 				PID:    pid,
-				Name:   name,
+				Name:   compactProcessName(name),
 				User:   username,
 				CPU:    cpu,
 				Memory: memoryMB,
@@ -228,4 +228,13 @@ func normalizeProcessState(status []string) string {
 		}
 	}
 	return "Sleeping"
+}
+
+func compactProcessName(name string) string {
+	name = strings.Join(strings.Fields(name), " ")
+	name = strings.ReplaceAll(name, ",", " ")
+	if len(name) <= 80 {
+		return name
+	}
+	return name[:77] + "..."
 }
