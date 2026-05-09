@@ -9,10 +9,25 @@ interface AIInsightPanelProps {
 }
 
 const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loading, onRefresh }) => {
+  const [copiedActionId, setCopiedActionId] = React.useState<string | null>(null);
+  const [copyErrorActionId, setCopyErrorActionId] = React.useState<string | null>(null);
   const analysisId = React.useMemo(() => {
     if (!analysis) return '';
     return Math.random().toString(36).slice(2, 8).toUpperCase();
   }, [analysis]);
+
+  const handleCopyCommand = async (actionId: string, command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopiedActionId(actionId);
+      setCopyErrorActionId(null);
+      window.setTimeout(() => setCopiedActionId(null), 1500);
+    } catch {
+      setCopyErrorActionId(actionId);
+      setCopiedActionId(null);
+      window.setTimeout(() => setCopyErrorActionId(null), 1500);
+    }
+  };
 
   const getStatusColor = (status?: string) => {
     switch(status) {
@@ -138,8 +153,12 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loadin
                            <span className={`text-[10px] px-2 py-0.5 border ${action.isSafe ? 'border-neon-green text-neon-green' : 'border-neon-red text-neon-red'} uppercase tracking-wider`}>
                              {action.isSafe ? 'Approved' : 'Restricted'}
                            </span>
-                           <button className="text-[10px] bg-gray-800 hover:bg-white hover:text-black px-3 py-1 uppercase tracking-wider transition-colors">
-                             Execute
+                           <button
+                             type="button"
+                             onClick={() => handleCopyCommand(action.id, action.command)}
+                             className="text-[10px] bg-gray-800 hover:bg-white hover:text-black px-3 py-1 uppercase tracking-wider transition-colors"
+                           >
+                             {copyErrorActionId === action.id ? 'Copy failed' : copiedActionId === action.id ? 'Copied' : 'Copy'}
                            </button>
                         </div>
                         <div className="bg-black p-2 font-mono text-sm text-neon-blue mb-2 border-l-2 border-gray-700 group-hover:border-neon-blue transition-colors">
