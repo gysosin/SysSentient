@@ -18,8 +18,8 @@ var ErrBroadcastQueueFull = errors.New("websocket broadcast queue full")
 
 // WSMessage represents a message sent over WebSocket
 type WSMessage struct {
-	Type    string      `json:"type"` // "metrics", "alert", "prediction"
-	Payload interface{} `json:"payload"`
+	Type    string              `json:"type"` // "metrics"
+	Payload *models.SystemState `json:"payload"`
 }
 
 // Client represents a single WebSocket connection
