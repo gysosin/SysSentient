@@ -9,8 +9,8 @@ SysSentient is an intelligent system monitor that uses Google Gemini AI to analy
 
 ## Prerequisites
 
-- Go 1.25+
-- Node.js 18+
+- Go 1.25.10+ or Go toolchain auto-download enabled
+- Node.js 22+
 - Google Gemini API Key
 
 ## Building

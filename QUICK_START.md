@@ -4,10 +4,10 @@
 
 ### 1. Install Dependencies
 ```bash
-# Go 1.25+
+# Go 1.25.10+ or GOTOOLCHAIN=auto
 go version
 
-# Node.js 18+ (for web UI)
+# Node.js 22+ (for web UI)
 node --version
 npm --version
 ```
@@ -88,12 +88,18 @@ server-side.
 
 ### Run All Tests
 ```bash
-go test ./internal/... -v
+GOTOOLCHAIN=auto go test ./... -v
 ```
 
 ### Check Build
 ```bash
-go build ./cmd/daemon
+GOTOOLCHAIN=auto go build ./cmd/daemon
+```
+
+### Security Checks
+```bash
+GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+cd web && npm audit --audit-level=moderate
 ```
 
 ---
