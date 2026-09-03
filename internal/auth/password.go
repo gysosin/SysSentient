@@ -106,11 +106,18 @@ func decodeHash(encoded string) (argonParams, []byte, []byte, error) {
 	if p.memory == 0 || p.time == 0 || p.threads == 0 {
 		return argonParams{}, nil, nil, ErrMalformedHash
 	}
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	// Strict: the non-strict decoder silently ignores the trailing padding
+	// bits of the final base64 character, so two different encodings decode to
+	// the same bytes. A 32-byte key encodes to 43 characters whose last one
+	// carries only 4 significant bits, which means a stored hash ending in "A"
+	// and the same hash ending in "B" verify identically. A stored hash is
+	// data, not trusted input, and it has exactly one canonical encoding —
+	// anything else is corrupt or tampered with and must not verify.
+	salt, err := base64.RawStdEncoding.Strict().DecodeString(parts[4])
 	if err != nil || len(salt) == 0 {
 		return argonParams{}, nil, nil, ErrMalformedHash
 	}
-	key, err := base64.RawStdEncoding.DecodeString(parts[5])
+	key, err := base64.RawStdEncoding.Strict().DecodeString(parts[5])
 	// An upper bound matters: the decoded length is fed to argon2 as the
 	// requested key size, so a corrupt or hostile row could otherwise ask for
 	// an enormous allocation. Real argon2id outputs are tens of bytes.

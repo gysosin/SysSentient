@@ -84,16 +84,61 @@ func TestVerifyPasswordRejectsMalformedHash(t *testing.T) {
 
 func TestVerifyPasswordRejectsTamperedHash(t *testing.T) {
 	t.Parallel()
-	encoded, _ := HashPassword("correct horse battery staple")
-	last := encoded[len(encoded)-1]
+	const password = "correct horse battery staple"
+	encoded, err := HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	// Tamper with a character in the middle of the key rather than the last
+	// one. The final base64 character of a 32-byte key carries only 4
+	// significant bits, so flipping it can leave the decoded bytes identical —
+	// which made the previous version of this test fail roughly one run in
+	// sixteen and look like an authentication bypass.
+	i := len(encoded) - 8
 	swap := byte('A')
-	if last == 'A' {
+	if encoded[i] == 'A' {
 		swap = 'B'
 	}
-	tampered := encoded[:len(encoded)-1] + string(swap)
-	ok, _ := VerifyPassword(tampered, "correct horse battery staple")
+	tampered := encoded[:i] + string(swap) + encoded[i+1:]
+	if tampered == encoded {
+		t.Fatal("tamper produced an identical string")
+	}
+
+	ok, _ := VerifyPassword(tampered, password)
 	if ok {
 		t.Fatal("tampered hash verified")
+	}
+}
+
+// The final base64 character of the key holds 4 data bits and 2 padding bits.
+// A non-strict decoder ignores those padding bits, so two distinct strings
+// decode to the same key and both verify. Anything but the canonical encoding
+// must be rejected outright.
+func TestVerifyPasswordRejectsNonCanonicalBase64(t *testing.T) {
+	t.Parallel()
+	const password = "correct horse battery staple"
+	encoded, err := HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	last := encoded[len(encoded)-1]
+	// Canonical final characters have their low two bits clear; setting one
+	// produces a different string that decodes to identical bytes.
+	alphabet := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	idx := strings.IndexByte(alphabet, last)
+	if idx < 0 || idx%4 != 0 {
+		t.Skipf("key ends in %q, which is not a canonical boundary character", last)
+	}
+	noncanonical := encoded[:len(encoded)-1] + string(alphabet[idx+1])
+
+	ok, err := VerifyPassword(noncanonical, password)
+	if ok {
+		t.Fatal("non-canonical encoding of the same key verified")
+	}
+	if !errors.Is(err, ErrMalformedHash) {
+		t.Fatalf("error = %v, want ErrMalformedHash", err)
 	}
 }
 
