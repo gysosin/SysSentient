@@ -2,7 +2,7 @@ package collector
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,6 +46,8 @@ type procCPUSample struct {
 }
 
 type Collector struct {
+	// statReader keeps a scratch buffer alive across polls.
+	statReader      *statReader
 	topProcesses    int
 	hostIDOverride  string
 	procCache       map[int32]*process.Process
@@ -69,6 +71,7 @@ func NewCollectorWithHostID(topProcesses int, hostIDOverride string) *Collector 
 		topProcesses = defaultTopProcesses
 	}
 	return &Collector{
+		statReader:     newStatReader(),
 		topProcesses:   topProcesses,
 		hostIDOverride: strings.TrimSpace(hostIDOverride),
 		procCache:      make(map[int32]*process.Process),
@@ -82,7 +85,14 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 
 	// 1. CPU Usage (Global + Per-Core)
 	// Blocking call for 500ms to get a sample
-	cpuPercent, err := cpu.Percent(500*time.Millisecond, false)
+	// interval 0 measures against the previous call rather than sleeping.
+	//
+	// The blocking form held the daemon's main select loop for 500ms of every
+	// two-second tick — a quarter of the cycle — and Go tickers drop ticks
+	// rather than queue them, so any overrun silently lost samples. Polling
+	// every two seconds already provides the interval to diff against, so the
+	// sleep bought nothing.
+	cpuPercent, err := cpu.Percent(0, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cpu stats: %w", err)
 	}
@@ -218,21 +228,35 @@ func counterDelta(current, previous uint64) uint64 {
 	return current - previous
 }
 
+// getTopProcesses returns the `limit` busiest processes by current CPU.
+//
+// Two passes, deliberately. The first is cheap: one Times() read per PID to
+// derive CPU from the delta since the last poll. Only the survivors of that
+// ranking pay for Name, Username, MemoryInfo and Status.
+//
+// The previous version fetched all four for every process above a 0.1%
+// threshold and then threw all but `limit` of them away in the sort — several
+// hundred processes' worth of syscalls on a busy host to display ten rows.
+// This runs on every tick for the life of the daemon, so it is the single
+// biggest cost in the collector.
 func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process, error) {
 	pids, err := process.Pids()
 	if err != nil {
 		return nil, err
 	}
 
-	var stats []models.Process
-	newCache := make(map[int32]*process.Process)
+	type candidate struct {
+		pid  int32
+		proc *process.Process
+		cpu  float64
+	}
+
+	candidates := make([]candidate, 0, limit*4)
+	newCache := make(map[int32]*process.Process, len(pids))
 
 	for _, pid := range pids {
-		var p *process.Process
-		if cached, ok := c.procCache[pid]; ok {
-			p = cached
-		} else {
-			// New process
+		p, ok := c.procCache[pid]
+		if !ok {
 			p, err = process.NewProcess(pid)
 			if err != nil {
 				continue
@@ -241,31 +265,15 @@ func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process,
 		newCache[pid] = p
 
 		// Current CPU, derived from the delta since the previous poll.
-		// p.CPUPercent() is a lifetime average and mis-ranks processes badly.
-		var totalSeconds float64
-		if times, err := p.Times(); err == nil && times != nil {
-			totalSeconds = times.User + times.System + times.Nice + times.Iowait +
-				times.Irq + times.Softirq + times.Steal
+		// p.CPUPercent() is a lifetime average and mis-ranks processes badly:
+		// something that pegged a core an hour ago outranks one busy now.
+		totalSeconds, ok := c.statReader.cpuSeconds(pid)
+		if !ok {
+			continue
 		}
-		cpu := c.processCPUPercent(pid, totalSeconds, now)
 
-		if cpu > 0.1 { // Filter out very low usage
-			name, _ := p.Name()
-			username, _ := p.Username()
-			memInfo, _ := p.MemoryInfo()
-			status, _ := p.Status()
-			memoryMB := uint64(0)
-			if memInfo != nil {
-				memoryMB = memInfo.RSS / 1024 / 1024 // Convert to MB
-			}
-			stats = append(stats, models.Process{
-				PID:    pid,
-				Name:   compactProcessName(name),
-				User:   username,
-				CPU:    cpu,
-				Memory: memoryMB,
-				State:  normalizeProcessState(status),
-			})
+		if cpu := c.processCPUPercent(pid, totalSeconds, now); cpu > 0.1 {
+			candidates = append(candidates, candidate{pid: pid, proc: p, cpu: cpu})
 		}
 	}
 
@@ -281,13 +289,44 @@ func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process,
 		}
 	}
 
-	sort.Slice(stats, func(i, j int) bool {
-		return stats[i].CPU > stats[j].CPU
+	slices.SortFunc(candidates, func(a, b candidate) int {
+		switch {
+		case a.cpu > b.cpu:
+			return -1
+		case a.cpu < b.cpu:
+			return 1
+		default:
+			return 0
+		}
 	})
-
-	if len(stats) > limit {
-		stats = stats[:limit]
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
 	}
+
+	// Only now, for the handful that will actually be displayed, pay for the
+	// metadata.
+	stats := make([]models.Process, 0, len(candidates))
+	for _, c := range candidates {
+		name, _ := c.proc.Name()
+		username, _ := c.proc.Username()
+		memInfo, _ := c.proc.MemoryInfo()
+		status, _ := c.proc.Status()
+
+		memoryMB := uint64(0)
+		if memInfo != nil {
+			memoryMB = memInfo.RSS / 1024 / 1024
+		}
+
+		stats = append(stats, models.Process{
+			PID:    c.pid,
+			Name:   compactProcessName(name),
+			User:   username,
+			CPU:    c.cpu,
+			Memory: memoryMB,
+			State:  normalizeProcessState(status),
+		})
+	}
+
 	return stats, nil
 }
 
@@ -381,8 +420,15 @@ func collectFilesystems() []models.Filesystem {
 	}
 
 	// Fullest first: that is the row an operator needs to see.
-	sort.Slice(filesystems, func(i, j int) bool {
-		return filesystems[i].UsedPercent > filesystems[j].UsedPercent
+	slices.SortFunc(filesystems, func(a, b models.Filesystem) int {
+		switch {
+		case a.UsedPercent > b.UsedPercent:
+			return -1
+		case a.UsedPercent < b.UsedPercent:
+			return 1
+		default:
+			return 0
+		}
 	})
 
 	return filesystems
