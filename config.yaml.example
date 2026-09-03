@@ -37,6 +37,17 @@ collector:
   top_processes: 10
 
 database:
+  # Retention is tiered. Full-resolution samples cost roughly 2.2 KB each at a
+  # two-second interval, so they are kept briefly and then rolled up rather
+  # than deleted -- a year of raw samples would be tens of gigabytes per host.
+  #
+  #   metrics_retention_hours  full resolution
+  #   minute_rollup_days       per-minute averages and peaks
+  #   five_minute_rollup_days  per-five-minute averages and peaks
+  #
+  # Data only leaves the system at the end of the last tier.
+  minute_rollup_days: 30
+  five_minute_rollup_days: 365
   path: "sys-sentient.db"
   metrics_retention_hours: 24
   insights_retention_hours: 168

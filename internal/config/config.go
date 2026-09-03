@@ -46,9 +46,14 @@ type AuthConfig struct {
 }
 
 type DatabaseConfig struct {
-	Path                   string `mapstructure:"path"`
-	MetricsRetentionHours  int    `mapstructure:"metrics_retention_hours"`
-	InsightsRetentionHours int    `mapstructure:"insights_retention_hours"`
+	Path                  string `mapstructure:"path"`
+	MetricsRetentionHours int    `mapstructure:"metrics_retention_hours"`
+	// Tiered retention. Raw samples are expensive — roughly 4.3 KB a row at a
+	// two-second interval — so full resolution is kept briefly and rolled up
+	// rather than discarded. These control how long each aggregate survives.
+	MinuteRollupDays       int `mapstructure:"minute_rollup_days"`
+	FiveMinuteRollupDays   int `mapstructure:"five_minute_rollup_days"`
+	InsightsRetentionHours int `mapstructure:"insights_retention_hours"`
 }
 
 type GeminiConfig struct {
@@ -151,6 +156,8 @@ func LoadConfig(path string) (*Config, error) {
 	})
 	v.SetDefault("database.path", "sys-sentient.db")
 	v.SetDefault("database.metrics_retention_hours", 24)
+	v.SetDefault("database.minute_rollup_days", 30)
+	v.SetDefault("database.five_minute_rollup_days", 365)
 	v.SetDefault("database.insights_retention_hours", 7*24)
 	v.SetDefault("gemini.api_key", "") // Ensure env var is picked up
 	v.SetDefault("gemini.model_name", "gemini-2.5-flash-lite")
@@ -277,6 +284,16 @@ func (c *Config) Validate() error {
 
 	if c.Database.MetricsRetentionHours < 1 {
 		return fmt.Errorf("metrics retention must be at least 1 hour, got %d", c.Database.MetricsRetentionHours)
+	}
+
+	if c.Database.MinuteRollupDays < 1 {
+		return fmt.Errorf("minute rollup retention must be at least 1 day, got %d", c.Database.MinuteRollupDays)
+	}
+	// A five-minute tier shorter than the minute tier would delete the coarse
+	// data before the fine data it was derived from, which is backwards.
+	if c.Database.FiveMinuteRollupDays < c.Database.MinuteRollupDays {
+		return fmt.Errorf("five-minute rollup retention (%d days) must be at least the minute retention (%d days)",
+			c.Database.FiveMinuteRollupDays, c.Database.MinuteRollupDays)
 	}
 
 	if c.Database.InsightsRetentionHours < 1 {

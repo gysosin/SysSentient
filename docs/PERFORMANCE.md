@@ -79,6 +79,39 @@ the survivors pay. On the measured host this was a small win — 19 processes
 cleared the threshold, not hundreds — but it scales with how busy the machine
 is, which is exactly when the cost is least welcome.
 
+## Storage
+
+Retention is tiered: full-resolution samples for 24 hours, per-minute rollups
+for 30 days, per-five-minute for a year. Only the last tier deletes anything.
+
+Measured on 1,800 samples (one hour at the default interval) with realistic
+payloads — eight cores, ten processes, four filesystems:
+
+| | |
+|---|---|
+| Raw row | 2,166 bytes |
+| Raw, one hour | 3,808 KB |
+| Same hour rolled up and vacuumed | **88 KB — 2.3% of raw** |
+| Extrapolated raw, per host per day | 89.2 MB |
+
+The raw tier still dominates the total, because a full sample carries JSON for
+the per-core list, the process list and every filesystem. Reducing that payload
+is separate work; tiering is what makes keeping a year of history affordable at
+all.
+
+Two SQLite fixes came with it. The connection pool was capped at one, which
+enabled WAL and then forfeited the concurrent reads that are the only reason to
+use it. And ingest wrote one autocommit transaction per sample, so an agent's
+60-sample flush was 60 fsyncs contending for a single write lock — batching it
+into one transaction is 2.1x faster (6.4ms to 3.1ms for 60 samples).
+
+### Measuring the footprint
+
+Close the database before sizing it. An open database keeps pending deletes in
+the WAL, so measuring while it is open counts the data twice and makes a rollup
+look like it *grew* the file — which is exactly what the first attempt at this
+measurement reported.
+
 ## Still open
 
 - Collection remains synchronous with the tick. It no longer blocks for half a

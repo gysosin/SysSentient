@@ -41,8 +41,22 @@ func TestNewStoreConfiguresSQLiteRuntime(t *testing.T) {
 	}
 	defer store.Close()
 
-	if maxOpen := store.db.Stats().MaxOpenConnections; maxOpen != 1 {
-		t.Fatalf("Expected one open SQLite connection, got %d", maxOpen)
+	// More than one connection, deliberately. WAL allows one writer and many
+	// concurrent readers; the pool was previously capped at one, which enabled
+	// WAL and then forfeited the only thing it provides — every dashboard read
+	// serialised behind every write.
+	if maxOpen := store.db.Stats().MaxOpenConnections; maxOpen < 2 {
+		t.Fatalf("expected a pool that allows concurrent reads, got MaxOpenConnections=%d", maxOpen)
+	}
+
+	var journalMode string
+	if err := store.db.QueryRow(`PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatalf("Failed to read journal_mode pragma: %v", err)
+	}
+	// Without WAL, a pool larger than one makes things worse rather than
+	// better: readers and the writer would block each other outright.
+	if !strings.EqualFold(journalMode, "wal") {
+		t.Fatalf("expected WAL journal mode, got %q", journalMode)
 	}
 
 	var busyTimeout int
