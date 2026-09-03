@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 2 — Performance |
 | **Depends on** | 01 |
-| **Status** | not started |
+| **Status** | **done** — 4.10% -> 0.78% idle CPU |
 
 ## Why
 

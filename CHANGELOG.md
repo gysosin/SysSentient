@@ -82,6 +82,13 @@ everything below is the initial published state rather than a delta.
 
 ### Changed
 
+- **Idle CPU cut from 4.10% of a core to 0.78%**, and garbage per collection
+  from 14.8 MB to 0.78 MB. Two causes: a 500 ms sleep held the main loop for a
+  quarter of every two-second tick, and gopsutil's `Times()` was called once
+  per process — 594 times per poll — allocating ~50 objects each to read two
+  integers that `/proc/<pid>/stat` gives directly. See `docs/PERFORMANCE.md`
+  for the numbers and how to reproduce them.
+
 - **Settings is organised into sections** — Status, Configuration, Privacy &
   integrations, Users, Account — instead of six panels stacked in one grid,
   which put the change-password form beside the API endpoint reference. Each
