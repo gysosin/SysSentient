@@ -47,6 +47,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Frontend toolchain raised: **Vite 6 → 8** (rolldown), **Vitest 3 → 5**,
+  **recharts 2 → 3**, React 19.2.3 → 19.2.8. Build time dropped from ~8s to
+  ~0.8s. Two breaking changes needed fixing: rolldown's `manualChunks` only
+  accepts a function, and recharts 3 widened its tooltip formatter signatures.
+
 - **The SQLite driver is now pure Go** (`modernc.org/sqlite` replacing
   `mattn/go-sqlite3`). `CGO_ENABLED=0` builds succeed for linux, windows and
   darwin on both amd64 and arm64 — previously only linux/amd64 built at all,
