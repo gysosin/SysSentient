@@ -30,7 +30,7 @@ export function SectionHeading({
     <div className={cn('flex min-w-0 items-center justify-between gap-4', className)}>
       <div className="min-w-0">
         {eyebrow && (
-          <p className="text-mute text-[10px] font-medium tracking-[0.2em] uppercase">{eyebrow}</p>
+          <p className="text-mute text-2xs font-medium tracking-[0.2em] uppercase">{eyebrow}</p>
         )}
         <h2
           id={id}
@@ -65,7 +65,7 @@ export function ScreenHeading({
   return (
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div className="max-w-2xl">
-        <p className="text-brand text-[10px] font-semibold tracking-[0.22em] uppercase">{eyebrow}</p>
+        <p className="text-brand text-2xs font-semibold tracking-[0.22em] uppercase">{eyebrow}</p>
         <h1 className="text-foreground font-display mt-2 text-4xl font-bold tracking-tight uppercase sm:text-5xl">
           {title}
         </h1>

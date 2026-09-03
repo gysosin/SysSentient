@@ -91,7 +91,7 @@ const Logs: React.FC = () => {
                     onClick={() => toggleLevel(level)}
                     aria-pressed={on}
                     className={cn(
-                      'border-line px-3 py-2 font-mono text-[11px] font-semibold transition-colors not-last:border-r',
+                      'border-line px-3 py-2 font-mono text-2xs font-semibold transition-colors not-last:border-r',
                       on
                         ? level === 'ERROR'
                           ? 'bg-crit-soft text-crit'
@@ -127,7 +127,7 @@ const Logs: React.FC = () => {
               the recessed dark ground separates machine output from the
               console's own chrome. */}
           <div className="border-line bg-background overflow-hidden rounded-lg border">
-            <div className="border-line bg-panel-strong text-mute flex items-center justify-between gap-3 border-b px-4 py-2 font-mono text-[11px]">
+            <div className="border-line bg-panel-strong text-mute flex items-center justify-between gap-3 border-b px-4 py-2 font-mono text-2xs">
               <span className="text-foreground truncate font-semibold">
                 {current.hostname || 'host'} — journald stream
               </span>
@@ -172,7 +172,7 @@ const Logs: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <ul className="max-h-[65vh] overflow-y-auto p-3 font-mono text-[11px]">
+              <ul className="max-h-[65vh] overflow-y-auto p-3 font-mono text-2xs">
                 {rows.map((log, idx) => (
                   <motion.li
                     key={`${log.timestamp}-${idx}`}

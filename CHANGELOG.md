@@ -75,6 +75,13 @@ everything below is the initial published state rather than a delta.
 
 ### Changed
 
+- **Readable type and a full-width layout.** 72 hardcoded font sizes between
+  9px and 13px are replaced by a named scale with a 12px floor; log timestamps
+  in particular were unreadable. The shell no longer caps at 1600px, which left
+  roughly a third of a 2560px display unused on a product whose job is dense
+  information. A test now fails the build on any font size below the floor or
+  any fixed pixel cap in the shell — this had already regressed twice.
+
 - **The dashboard is embedded in the binary** (`web/embed.go`). The server
   previously read it from `./web/dist` relative to the working directory, which
   is why the systemd unit had to pin `WorkingDirectory` — and why no `.deb`,

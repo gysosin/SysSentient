@@ -113,7 +113,7 @@ const Processes: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="text-mute border-line border-b font-mono text-[10px] tracking-[0.15em] uppercase">
+                <tr className="text-mute border-line border-b font-mono text-2xs tracking-[0.15em] uppercase">
                   {COLUMNS.map((col) => {
                     const active = sortKey === col.key;
                     return (
@@ -157,13 +157,13 @@ const Processes: React.FC = () => {
                       transition={{ duration: 0.15 }}
                       className="hover:bg-panel-strong/60 border-b border-transparent transition-colors last:border-0"
                     >
-                      <td className="text-mute tabular px-5 py-2.5 text-right font-mono text-[12px]">
+                      <td className="text-mute tabular px-5 py-2.5 text-right font-mono text-2xs">
                         {proc.pid}
                       </td>
                       <td className="max-w-[320px] truncate px-5 py-2.5 font-medium" title={proc.name}>
                         {proc.name}
                       </td>
-                      <td className="text-mute px-5 py-2.5 font-mono text-[12px]">{proc.user}</td>
+                      <td className="text-mute px-5 py-2.5 font-mono text-2xs">{proc.user}</td>
                       <td className="px-5 py-2.5">
                         <div className="flex items-center justify-end gap-2.5">
                           <Meter
@@ -174,7 +174,7 @@ const Processes: React.FC = () => {
                           />
                           <span
                             className={cn(
-                              'tabular w-14 text-right font-mono text-[12px]',
+                              'tabular w-14 text-right font-mono text-2xs',
                               proc.cpu > 80 ? 'text-crit' : proc.cpu > 40 ? 'text-warn' : '',
                             )}
                           >
@@ -182,7 +182,7 @@ const Processes: React.FC = () => {
                           </span>
                         </div>
                       </td>
-                      <td className="text-mute tabular px-5 py-2.5 text-right font-mono text-[12px]">
+                      <td className="text-mute tabular px-5 py-2.5 text-right font-mono text-2xs">
                         {proc.memory} MB
                       </td>
                       <td className="px-5 py-2.5">

@@ -203,6 +203,26 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  /* Type scale.
+     
+     The console previously hardcoded 72 sizes between 9px and 13px, four of
+     them at 9px — below any comfortable reading floor, and the reason
+     timestamps were unreadable. The floor here is 12px, and it is a floor:
+     `text-2xs` is the smallest step that exists, so there is no way to write
+     a 9px label without reaching for an arbitrary value, which the build now
+     rejects.
+
+     Steps are named by role rather than by size so a future re-scale does not
+     mean touching every component again. */
+  --text-2xs: 0.75rem;    /* 12px — the floor: eyebrows, chips, dense labels */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.8125rem;   /* 13px — supporting text, table cells */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;    /* 14px — body */
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;      /* 16px */
+  --text-base--line-height: 1.5rem;
+
   /* Near-square. Generous radii read as consumer software; an instrument wants
      corners that stay out of the way. */
   --radius-sm: 0.25rem;

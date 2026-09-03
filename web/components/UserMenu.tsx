@@ -33,7 +33,7 @@ export const UserMenu: React.FC<{ user: AuthUser; onSignOut: () => void }> = ({
     <DropdownMenuContent align="end">
       <DropdownMenuLabel className="flex items-center justify-between gap-3">
         <span className="truncate">{user.email}</span>
-        <Badge variant="outline" className="px-1.5 py-0 text-[10px] uppercase">
+        <Badge variant="outline" className="px-1.5 py-0 text-2xs uppercase">
           {user.role}
         </Badge>
       </DropdownMenuLabel>
