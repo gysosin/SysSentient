@@ -34,13 +34,42 @@ jobs:
         run: go vet ./...
 
       - name: Run Go tests
-        run: go test ./...
+        # -race catches the concurrency bugs a metrics daemon is prone to;
+        # the collector loop, the WebSocket hub and the alert evaluator all
+        # touch shared state from different goroutines.
+        run: go test ./... -race
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
 
       - name: Scan Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
       - name: Build daemon
         run: go build -o /tmp/sys-daemon ./cmd/daemon
+
+      - name: Smoke test the daemon
+        # Nothing previously ever RAN the built binary in CI. A daemon that
+        # compiles but panics on boot would have shipped unnoticed.
+        run: |
+          set -euo pipefail
+          /tmp/sys-daemon --version
+          SYS_SENTIENT_DATABASE_PATH=/tmp/smoke.db /tmp/sys-daemon &
+          DAEMON_PID=$!
+          trap 'kill "$DAEMON_PID" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1; then
+              echo "daemon is healthy"
+              curl -fsS http://127.0.0.1:8080/health
+              curl -fsS http://127.0.0.1:8080/metrics | head -5
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "daemon did not become healthy in time" >&2
+          exit 1
 
   frontend:
     name: Web dashboard

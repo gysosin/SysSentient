@@ -31,3 +31,37 @@ sys-sentient
 *.njsproj
 *.sln
 *.sw?
+
+# ---------------------------------------------------------------
+# AI / agent tooling - local developer tooling, never pushed.
+# This project has a single human contributor; none of this is
+# project source and none of it belongs in the repository.
+# ---------------------------------------------------------------
+
+# Installed agent skills + their lockfile
+/.agents/
+/agent/
+/skills-lock.json
+
+# Agent/assistant config and instruction files
+/.claude/
+/CLAUDE.md
+/.codex/
+/AGENTS.local.md
+/GEMINI.md
+/.gemini/
+/.cursor/
+/.cursorrules
+/.windsurfrules
+/.aider*
+/.continue/
+/.roo/
+/.kilocode/
+/.opencode/
+/.antigravity/
+/.mcp.json
+.github/copilot-instructions.md
+
+# Local runtime config. config.yaml.example is the tracked template; the real
+# file holds the Gemini key and the server/agent tokens.
+/config.yaml

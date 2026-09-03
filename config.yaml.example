@@ -1,0 +1,65 @@
+# SysSentient configuration.
+#
+# Every key can also be set as an environment variable using the
+# SYS_SENTIENT_ prefix with dots replaced by underscores, e.g.
+#   server.api_key      -> SYS_SENTIENT_SERVER_API_KEY
+#   alerting.webhook_url -> SYS_SENTIENT_ALERTING_WEBHOOK_URL
+#
+# Searched in ./config.yaml and /etc/sys-sentient/config.yaml, or pass
+# --config /path/to/config.yaml.
+#
+# Copy to config.yaml and edit. Do not commit real keys.
+
+server:
+  port: 8080
+  # Machine token for scripts and curl: send it as `X-API-Key` or as
+  # `Authorization: Bearer`. Browser users sign in at /login instead; on first
+  # run the daemon logs a one-time setup token and /setup creates the admin.
+  api_key: ""
+  # Disable authentication entirely. Only for throwaway local runs -- the
+  # daemon warns on every start and anyone who can reach the port is an admin.
+  insecure: false
+
+auth:
+  session_idle_hours: 24     # sign out after this much inactivity
+  session_max_days: 30       # ...and unconditionally after this long
+  login_rate_per_minute: 5   # per client IP; each attempt costs an argon2 hash
+
+logging:
+  # debug | info | warn | error. debug includes a line per collected sample.
+  level: "info"
+  # text | json. Use json when shipping to a log aggregator.
+  format: "text"
+
+collector:
+  poll_interval_seconds: 2
+  # Processes recorded per sample. Each one costs several /proc reads per poll.
+  top_processes: 10
+
+database:
+  path: "sys-sentient.db"
+  metrics_retention_hours: 24
+  insights_retention_hours: 168
+
+alerting:
+  enabled: true
+  # Receives the raw alert JSON on every state transition (firing/resolved).
+  webhook_url: ""
+  # Slack incoming-webhook URL; receives a formatted message.
+  slack_webhook_url: ""
+
+gemini:
+  # AI analysis is disabled entirely when this is empty.
+  api_key: ""
+  model_name: "gemini-2.5-flash-lite"
+  # Hard daily spend cap in USD, enforced per UTC day. Set to 0 to disable the
+  # cap. Cost is estimated from token usage, so treat it as a safety rail
+  # rather than a billing figure.
+  max_daily_cost: 1.0
+
+privacy:
+  # Applied to logs, process names and the top-process summary before anything
+  # is sent to Gemini.
+  mask_ips: true
+  mask_emails: true
+  mask_usernames: true

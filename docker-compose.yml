@@ -1,0 +1,35 @@
+services:
+  sys-sentient:
+    build:
+      context: .
+      args:
+        VERSION: dev
+    image: sys-sentient:local
+    container_name: sys-sentient
+    restart: unless-stopped
+    ports:
+      # Bound to localhost: the daemon serves plain HTTP and its API key is
+      # readable from the dashboard bundle. Put a TLS proxy in front before
+      # exposing this beyond the host. See SECURITY.md.
+      - "127.0.0.1:8080:8080"
+    environment:
+      SYS_SENTIENT_LOGGING_FORMAT: json
+      # Uncomment and set to enable the respective features.
+      # SYS_SENTIENT_SERVER_API_KEY: "change-me"
+      # SYS_SENTIENT_GEMINI_API_KEY: "your-gemini-key"
+      # SYS_SENTIENT_ALERTING_SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/..."
+    volumes:
+      - sys-sentient-data:/var/lib/sys-sentient
+      # Host metrics require visibility into the host's namespaces. Without
+      # these the container reports its own cgroup limits, not the machine's.
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  sys-sentient-data:
