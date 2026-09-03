@@ -164,7 +164,16 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/users/{id}", s.requireAdmin(s.handleDeleteUser))
 
 	// Agents authenticate with their own key.
-	mux.HandleFunc("POST /api/ingest", s.agentAuth.AuthenticateFunc(s.handleIngest))
+	mux.HandleFunc("POST /api/ingest", s.authenticateAgent(s.handleIngest))
+
+	// Enrolment. Redeeming a token is unauthenticated by necessity — the token
+	// is the only credential a machine has before it joins — so it is rate
+	// limited to blunt brute-force guessing.
+	mux.HandleFunc("POST /api/agents/join", rateLimit(s.loginLimiter, "12", s.handleAgentJoin))
+	mux.HandleFunc("GET /api/agents", s.requireAuth(s.handleListAgents))
+	mux.HandleFunc("POST /api/agents/tokens", s.requireAdmin(s.handleCreateJoinToken))
+	mux.HandleFunc("GET /api/agents/tokens", s.requireAdmin(s.handleListJoinTokens))
+	mux.HandleFunc("DELETE /api/agents/{id}", s.requireAdmin(s.handleRevokeAgent))
 
 	// WebSocket: same principals as the REST API. The browser sends the
 	// cookie on a same-origin upgrade; scripts send X-API-Key.

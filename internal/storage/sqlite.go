@@ -71,6 +71,11 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	if err := createAgentTables(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	if err := createRollupTable(db); err != nil {
 		_ = db.Close()
 		return nil, err

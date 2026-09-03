@@ -7,6 +7,48 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Enrol a machine from the dashboard.** Settings → Devices issues a
+  single-use join token and shows the exact command to run on the new machine;
+  `sys-sentient agent join --server <url> --token <t>` exchanges it for a
+  credential belonging to that machine alone, writes `agent.yaml` with mode
+  `0600`, and prints how to start it. The device appears on the Devices screen
+  once it reports, with its version and last-seen.
+- **Per-agent credentials and revocation.** Previously the whole fleet shared
+  one static key: there was no per-machine identity, and withdrawing one
+  machine's access meant re-keying every machine at once. Revoke now takes
+  effect immediately for one device. Only credential hashes are stored, never
+  the credentials themselves.
+- `server.public_url`, so the enrolment command is correct behind a reverse
+  proxy, where the request's `Host` is the proxy's own name.
+
+### Changed
+
+- **The agent spool is append-only.** Every sample used to be written by
+  reading, decoding, re-encoding and rewriting the whole file: **230 ms per
+  sample** against a full 5,000-sample buffer, or 11% of a 2-second poll
+  interval, sustained for the entire outage the buffer exists to survive. It is
+  now **0.48 ms** amortised, including compaction — **484× faster**. Spools
+  written by earlier versions are read and preserved on upgrade.
+- `/api/ingest` no longer rejects unknown JSON fields. A newer agent sending a
+  field an older server has never heard of had its entire batch rejected with a
+  400, which turned any staggered fleet upgrade into an outage.
+- A revoked or unrecognised agent now logs one actionable error naming the fix,
+  instead of a generic warning that looks like a transient network problem.
+
+### Fixed
+
+- **An upgraded agent could silently stop reporting.** A spool written in the
+  old format and then appended to in the new one parsed as neither, so the
+  agent buffered indefinitely, sent nothing, and logged nothing at all. Both
+  formats are now read, including a file that contains each in turn.
+- A damaged spool line no longer discards the whole buffer, and a spool
+  truncated mid-write by a crash or a full disk no longer corrupts the next
+  sample appended after it.
+- The Devices screen showed "expires 0s from now" for every new token: the
+  countdown measured elapsed time against a future timestamp.
+
 ## [0.1.0-beta.1] - 2026-09-03
 
 First tagged release. The repository had 100+ commits and zero tags, so

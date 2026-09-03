@@ -51,7 +51,10 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 
 	var req IngestRequest
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
+	// Deliberately NOT DisallowUnknownFields. A newer agent sending a field
+	// this server has never heard of should have its known fields accepted,
+	// not have the whole batch rejected with a 400 — that turns any staggered
+	// fleet upgrade into an outage.
 	if err := decoder.Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid ingest payload")
 		return
@@ -110,6 +113,19 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to record host", "host_id", hostID, "error", err)
 		}
 		s.evaluateAndRecord(newest)
+	}
+
+	// Record that this credential is alive, so the Devices screen can show a
+	// real last-seen rather than only what the agent claims about itself.
+	if agent, ok := agentFrom(r.Context()); ok {
+		hostname := agent.Hostname
+		for _, newest := range seenHosts {
+			hostname = newest.Hostname
+			break
+		}
+		if err := s.store.TouchAgent(agent.ID, hostname, req.AgentVersion, time.Now()); err != nil {
+			slog.Error("failed to record agent last-seen", "agent_id", agent.ID, "error", err)
+		}
 	}
 
 	setProtectedJSONHeaders(w)

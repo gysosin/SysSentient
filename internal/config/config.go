@@ -28,7 +28,11 @@ type ServerConfig struct {
 	// separate from APIKey: the dashboard key is inlined into the published
 	// JavaScript bundle and readable by anyone who can load the page, so it
 	// must never also grant write access to the fleet's data.
-	AgentKey       string   `mapstructure:"agent_key"`
+	AgentKey string `mapstructure:"agent_key"`
+	// PublicURL is the address agents should call back on, used to build the
+	// enrolment command shown in the UI. Behind a reverse proxy the server
+	// cannot infer this, because the request's Host is the proxy's own.
+	PublicURL      string   `mapstructure:"public_url"`
 	AllowedOrigins []string `mapstructure:"allowed_origins"`
 	// Insecure disables authentication entirely. It exists for throwaway
 	// local runs and is warned about on every start; never set it on a

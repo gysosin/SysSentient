@@ -103,8 +103,18 @@ the dashboard and apply immediately; everything else is in
 ## Fleets
 
 One server, many agents. Agents collect locally and push over authenticated
-HTTPS, buffering to disk through a network outage. See
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+HTTPS, buffering to disk through a network outage.
+
+Adding a machine is two steps. In **Settings → Devices**, name it and press
+*Generate command*; then run what it gives you on that machine:
+
+```bash
+sys-sentient agent join --server https://monitor.example.com --token <token>
+```
+
+The token is single-use and expires in an hour. It buys a credential belonging
+to that machine alone, which you can revoke on its own without touching the
+rest of the fleet. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Backup
 

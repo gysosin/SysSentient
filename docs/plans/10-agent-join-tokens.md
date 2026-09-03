@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 3 — Fleet |
 | **Depends on** | 09 |
-| **Status** | not started |
+| **Status** | **done** — per-agent credentials, single-use join tokens, revocation |
 
 ## Why
 

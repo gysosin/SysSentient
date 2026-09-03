@@ -19,6 +19,29 @@ server:
   # Disable authentication entirely. Only for throwaway local runs -- the
   # daemon warns on every start and anyone who can reach the port is an admin.
   insecure: false
+  # Shared fleet-wide key for agents pushing to /api/ingest. Deliberately
+  # separate from api_key, which is readable by anyone who can load the
+  # dashboard and must never grant write access.
+  #
+  # Prefer per-agent enrolment: Settings -> Devices issues a single-use join
+  # token, and `sys-sentient agent join` exchanges it for a credential belonging
+  # to one machine, which can be revoked on its own. This key remains supported
+  # so an existing fleet keeps working and can migrate one machine at a time.
+  agent_key: ""
+  # The address agents should call back on, used to build the enrolment command
+  # shown in the UI. Set this behind a reverse proxy: without it the command is
+  # built from the request's Host, which is the proxy's own name.
+  public_url: ""
+
+# Agent mode. Written for you by `sys-sentient agent join` -- see
+# docs/DEPLOYMENT.md. Only read when mode is "agent".
+# agent:
+#   server_url: "https://monitor.example.com"
+#   key: "<this machine's own credential>"
+#   spool_path: /var/lib/sys-sentient/spool.jsonl
+#   batch_size: 60
+#   ca_cert_path: ""          # trust a private CA
+#   insecure_skip_verify: false
 
 auth:
   session_idle_hours: 24     # sign out after this much inactivity

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -115,6 +116,15 @@ func (c *Client) Enqueue(sample models.SystemState) error {
 	return c.spool.Append(sample)
 }
 
+// Credential failures the caller must distinguish from a network blip: no
+// amount of retrying resolves either, and each needs different operator action.
+var (
+	// ErrCredentialRevoked means this agent was removed from the fleet.
+	ErrCredentialRevoked = errors.New("this agent's credential has been revoked by the server")
+	// ErrCredentialRejected means the key is not recognised at all.
+	ErrCredentialRejected = errors.New("the server did not recognise this agent's credential")
+)
+
 // Flush attempts to deliver buffered samples.
 //
 // Samples are removed from the spool only after the server acknowledges them,
@@ -179,8 +189,14 @@ func (c *Client) push(ctx context.Context, samples []models.SystemState) (int, e
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return 0, fmt.Errorf("server rejected the agent key (status %d)", resp.StatusCode)
+	// A revoked credential is terminal: retrying cannot fix it, and the
+	// operator needs to be told to re-enrol rather than left reading a
+	// warning that looks like a transient network problem.
+	if resp.StatusCode == http.StatusForbidden {
+		return 0, fmt.Errorf("%w (status 403)", ErrCredentialRevoked)
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return 0, fmt.Errorf("%w (status 401)", ErrCredentialRejected)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return 0, fmt.Errorf("server returned status %d", resp.StatusCode)

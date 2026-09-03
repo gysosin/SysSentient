@@ -653,3 +653,73 @@ export async function updateRuntimeSettings(
   }
   return (await res.json()) as RuntimeSettings;
 }
+
+/** An enrolled machine reporting to this server. */
+export interface FleetAgent {
+  id: string;
+  host_id: string;
+  hostname: string;
+  label: string;
+  created_at: string;
+  last_seen_at?: string;
+  agent_version: string;
+  revoked_at?: string;
+}
+
+/** A single-use invitation awaiting redemption. */
+export interface JoinToken {
+  id: string;
+  label: string;
+  created_at: string;
+  expires_at: string;
+  created_by: string;
+}
+
+/**
+ * A freshly minted token.
+ *
+ * `token` is returned exactly once, at creation — the server stores only its
+ * hash — so the UI must show it immediately and cannot offer to reveal it later.
+ */
+export interface IssuedJoinToken {
+  token: string;
+  id: string;
+  label: string;
+  expires_at: string;
+  command: string;
+}
+
+export async function fetchAgents(): Promise<FleetAgent[]> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/agents`);
+  if (!res.ok) throw new Error('Failed to load devices');
+  const body = (await res.json()) as { agents: FleetAgent[] | null };
+  return body.agents ?? [];
+}
+
+export async function fetchJoinTokens(): Promise<JoinToken[]> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/agents/tokens`);
+  if (!res.ok) throw new Error('Failed to load pending invitations');
+  const body = (await res.json()) as { tokens: JoinToken[] | null };
+  return body.tokens ?? [];
+}
+
+export async function createJoinToken(label: string): Promise<IssuedJoinToken> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/agents/tokens`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label }),
+  });
+  if (!res.ok) {
+    throw new Error((await res.text()).trim() || 'Failed to create a join token');
+  }
+  return (await res.json()) as IssuedJoinToken;
+}
+
+export async function revokeAgent(id: string): Promise<void> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/agents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    throw new Error((await res.text()).trim() || 'Failed to revoke this device');
+  }
+}
