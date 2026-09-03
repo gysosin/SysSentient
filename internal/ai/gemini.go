@@ -2,7 +2,9 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sys-sentient/internal/config"
 	"sys-sentient/internal/models"
 	"time"
@@ -15,6 +17,7 @@ type AIService struct {
 	model          string
 	ragStore       *RAGStore
 	circuitBreaker *CircuitBreaker
+	budget         *CostBudget
 }
 
 func NewAIService(ctx context.Context, cfg config.GeminiConfig) (*AIService, error) {
@@ -34,6 +37,9 @@ func NewAIService(ctx context.Context, cfg config.GeminiConfig) (*AIService, err
 		model:          cfg.ModelName,
 		ragStore:       NewRAGStore(),
 		circuitBreaker: NewCircuitBreaker(3, 2*time.Minute), // 3 failures, 2min reset
+		// Enforces gemini.max_daily_cost, which the config has always
+		// advertised and nothing previously read.
+		budget: NewCostBudget(cfg.MaxDailyCost),
 	}, nil
 }
 
@@ -44,6 +50,12 @@ func (s *AIService) AnalyzeSystemState(ctx context.Context, state models.SystemS
 	if cached, found := s.ragStore.GetCachedInsight(signatureContent); found {
 		// Cached insight is already a JSON string
 		return cached, nil
+	}
+
+	// Refuse to spend past the operator's daily cap. Checked after the cache
+	// so a cached answer is still served once the budget is exhausted.
+	if err := s.budget.Check(); err != nil {
+		return "", err
 	}
 
 	// Use circuit breaker to protect against repeated API failures
@@ -92,6 +104,25 @@ Respond STRICTLY in JSON format with this structure:
 			return fmt.Errorf("failed to generate content: %w", apiErr)
 		}
 
+		// Record spend from the API's own usage metadata when present, and
+		// fall back to a length estimate so an unreported call still counts.
+		var inputTokens, outputTokens int64
+		if resp.UsageMetadata != nil {
+			inputTokens = int64(resp.UsageMetadata.PromptTokenCount)
+			outputTokens = int64(resp.UsageMetadata.CandidatesTokenCount)
+		}
+		if inputTokens == 0 {
+			inputTokens = EstimateTokens(prompt)
+		}
+		if outputTokens == 0 {
+			outputTokens = EstimateTokens(resp.Text())
+		}
+		cost := s.budget.Record(inputTokens, outputTokens)
+		if spent, limit := s.budget.Spent(); limit > 0 {
+			slog.Debug("gemini call accounted",
+				"cost_usd", cost, "spent_today_usd", spent, "daily_limit_usd", limit)
+		}
+
 		normalized, err := NormalizeAnalysisResponse(resp.Text())
 		if err != nil {
 			return err
@@ -102,7 +133,7 @@ Respond STRICTLY in JSON format with this structure:
 
 	if err != nil {
 		// Check if circuit is open
-		if err == ErrCircuitOpen {
+		if errors.Is(err, ErrCircuitOpen) {
 			return "", fmt.Errorf("AI service unavailable (circuit breaker open): too many recent failures")
 		}
 		return "", err
@@ -111,4 +142,13 @@ Respond STRICTLY in JSON format with this structure:
 	s.ragStore.SaveInsight(signatureContent, result)
 
 	return result, nil
+}
+
+// BudgetStatus reports today's AI spend against the configured cap, so the
+// operator can see whether the limit is doing anything.
+func (s *AIService) BudgetStatus() (spent, limit float64) {
+	if s == nil {
+		return 0, 0
+	}
+	return s.budget.Spent()
 }

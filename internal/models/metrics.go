@@ -4,24 +4,52 @@ import "time"
 
 // SystemState represents a snapshot of the system's performance metrics
 type SystemState struct {
-	Timestamp      time.Time `json:"timestamp"`
-	CPUUsage       float64   `json:"cpu_usage"`        // Total CPU utilization percentage
-	CPUPerCore     []float64 `json:"cpu_per_core"`     // Per-core CPU utilization
-	MemoryUsed     uint64    `json:"memory_used"`      // Used memory in bytes
-	MemoryTotal    uint64    `json:"memory_total"`     // Total memory in bytes
-	SwapUsed       uint64    `json:"swap_used"`        // Used swap in bytes
-	SwapTotal      uint64    `json:"swap_total"`       // Total swap in bytes
-	DiskReadBytes  uint64    `json:"disk_read_bytes"`  // Cumulative read bytes (or rate if processed)
-	DiskWriteBytes uint64    `json:"disk_write_bytes"` // Cumulative write bytes
-	DiskIOPS       float64   `json:"disk_iops"`        // Disk operations per second
-	NetSentBytes   uint64    `json:"net_sent_bytes"`   // Cumulative sent bytes
-	NetRecvBytes   uint64    `json:"net_recv_bytes"`   // Cumulative received bytes
-	LoadAvg1       float64   `json:"load_avg_1"`       // 1-minute load average
-	LoadAvg5       float64   `json:"load_avg_5"`       // 5-minute load average
-	LoadAvg15      float64   `json:"load_avg_15"`      // 15-minute load average
-	Temperature    float64   `json:"temperature"`      // System temperature in Celsius
-	TopProcesses   string    `json:"top_processes"`    // Human readable summary of top processes
-	Processes      []Process `json:"processes"`        // Structured top processes
+	// HostID is a stable identifier for the machine that produced this
+	// sample, derived from the systemd machine-id. Hostnames collide and
+	// change; the ID lets a renamed host keep its history.
+	HostID      string    `json:"host_id"`
+	Hostname    string    `json:"hostname"`
+	Timestamp   time.Time `json:"timestamp"`
+	CPUUsage    float64   `json:"cpu_usage"`    // Total CPU utilization percentage
+	CPUPerCore  []float64 `json:"cpu_per_core"` // Per-core CPU utilization
+	MemoryUsed  uint64    `json:"memory_used"`  // Used memory in bytes
+	MemoryTotal uint64    `json:"memory_total"` // Total memory in bytes
+	SwapUsed    uint64    `json:"swap_used"`    // Used swap in bytes
+	SwapTotal   uint64    `json:"swap_total"`   // Total swap in bytes
+	// MemoryCached and MemoryBuffers are what the "used" figure hides. Page
+	// cache is reclaimable on demand, so a host reporting 90% memory used with
+	// most of it cached is healthy, while the same number with none cached is
+	// about to start swapping. Reporting only the total invites false alarms.
+	MemoryCached   uint64  `json:"memory_cached"`    // Reclaimable page cache
+	MemoryBuffers  uint64  `json:"memory_buffers"`   // Block-layer buffers
+	DiskReadBytes  uint64  `json:"disk_read_bytes"`  // Cumulative read bytes (or rate if processed)
+	DiskWriteBytes uint64  `json:"disk_write_bytes"` // Cumulative write bytes
+	DiskIOPS       float64 `json:"disk_iops"`        // Disk operations per second
+	NetSentBytes   uint64  `json:"net_sent_bytes"`   // Cumulative sent bytes
+	NetRecvBytes   uint64  `json:"net_recv_bytes"`   // Cumulative received bytes
+	LoadAvg1       float64 `json:"load_avg_1"`       // 1-minute load average
+	LoadAvg5       float64 `json:"load_avg_5"`       // 5-minute load average
+	LoadAvg15      float64 `json:"load_avg_15"`      // 15-minute load average
+	Temperature    float64 `json:"temperature"`      // System temperature in Celsius
+	UptimeSeconds  uint64  `json:"uptime_seconds"`   // Host uptime; the dashboard previously
+	// fabricated this from a client-side page-load counter that reset on refresh.
+	TopProcesses string    `json:"top_processes"` // Human readable summary of top processes
+	Processes    []Process `json:"processes"`     // Structured top processes
+	// Filesystems reports capacity per mounted filesystem. Without this the
+	// product cannot detect a full disk — the most common outage cause.
+	Filesystems []Filesystem `json:"filesystems"`
+}
+
+// Filesystem is capacity for one mounted filesystem.
+type Filesystem struct {
+	Mountpoint        string  `json:"mountpoint"`
+	Device            string  `json:"device"`
+	FSType            string  `json:"fstype"`
+	TotalBytes        uint64  `json:"total_bytes"`
+	UsedBytes         uint64  `json:"used_bytes"`
+	FreeBytes         uint64  `json:"free_bytes"`
+	UsedPercent       float64 `json:"used_percent"`
+	InodesUsedPercent float64 `json:"inodes_used_percent"`
 }
 
 type Process struct {

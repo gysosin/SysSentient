@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -37,6 +37,10 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
+	// done makes Run terminable. Without it Run was an infinite for/select
+	// that leaked on every shutdown and left clients hanging.
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewHub creates a new Hub instance
@@ -46,18 +50,40 @@ func NewHub() *Hub {
 		broadcast:  make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		done:       make(chan struct{}),
 	}
 }
 
 // Run starts the hub's event loop
+// Close stops Run and disconnects every client. Safe to call more than once.
+func (h *Hub) Close() {
+	h.closeOnce.Do(func() {
+		close(h.done)
+	})
+}
+
 func (h *Hub) Run() {
+	// On exit, close every client's send channel so their write pumps finish
+	// instead of blocking on a hub that is no longer reading.
+	defer func() {
+		h.mu.Lock()
+		for client := range h.clients {
+			delete(h.clients, client)
+			close(client.send)
+		}
+		h.mu.Unlock()
+	}()
+
 	for {
 		select {
+		case <-h.done:
+			return
+
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client] = true
 			h.mu.Unlock()
-			log.Printf("WebSocket client connected. Total clients: %d", len(h.clients))
+			slog.Debug("websocket client connected", "clients", len(h.clients))
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -66,7 +92,7 @@ func (h *Hub) Run() {
 				close(client.send)
 			}
 			h.mu.Unlock()
-			log.Printf("WebSocket client disconnected. Total clients: %d", len(h.clients))
+			slog.Debug("websocket client disconnected", "clients", len(h.clients))
 
 		case message := <-h.broadcast:
 			h.mu.RLock()
@@ -130,15 +156,17 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			// A deadline error means the connection is already gone; the write
+			// below surfaces the real failure and returns.
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -146,7 +174,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -158,14 +186,15 @@ func (c *Client) writePump() {
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close()
 	}()
 
 	c.conn.SetReadLimit(512)
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
+		// Returning the error would abort the read loop on a connection that
+		// is already closing; ReadMessage reports it.
+		return c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	})
 
 	for {
@@ -180,7 +209,7 @@ func (c *Client) readPump() {
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
+		slog.Warn("websocket upgrade failed", "error", err)
 		return
 	}
 
