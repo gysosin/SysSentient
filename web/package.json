@@ -31,7 +31,7 @@
     "lucide-react": "^1.39.0",
     "motion": "^13.1.1",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",
     "recharts": "^2.12.0",
     "tailwind-merge": "^3.6.0"
@@ -43,7 +43,7 @@
     "@testing-library/user-event": "^14.6.6",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.23",
     "jsdom": "^30.0.1",
