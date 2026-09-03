@@ -117,15 +117,37 @@ e-mail addresses and home-directory usernames redacted first.
 by the daemon.** The dashboard only copies them to the clipboard; it never runs
 them. Read them before you do.
 
-## Installation (systemd)
+## Installation
+
+Every release ships static binaries and packages for linux, windows and darwin
+on amd64 and arm64. The dashboard is embedded in the binary, so there is
+nothing else to copy and it runs from any directory.
+
+**Debian / Ubuntu**
 
 ```bash
-sudo useradd --system --home-dir /var/lib/sys-sentient --shell /usr/sbin/nologin --groups systemd-journal sys-sentient
-sudo mkdir -p /opt/sys-sentient
-sudo cp sys-daemon /opt/sys-sentient/
-sudo cp sys-sentient.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now sys-sentient
+sudo dpkg -i sys-sentient_<version>_linux_amd64.deb
 ```
+
+**Fedora / RHEL**
+
+```bash
+sudo rpm -i sys-sentient_<version>_linux_amd64.rpm
+```
+
+The packages create the `sys-sentient` service account, install the systemd
+unit and drop a config at `/etc/sys-sentient/config.yaml` — marked
+`noreplace`, so an upgrade never overwrites your edits. They deliberately do
+**not** start the service: the first run mints a one-time setup token that you
+need to read from the log to create the first administrator.
+
+```bash
+sudo systemctl enable --now sys-sentient
+sudo journalctl -u sys-sentient | grep -i "setup token"
+```
+
+**Windows / macOS / anything else** — download the archive, extract, run
+`sys-daemon`. Verify downloads against `checksums.txt`.
 
 > The shipped unit sets `ProtectKernelLogs=true` and drops all capabilities, so
 > `dmesg` collection cannot work under it. journald remains available and is the

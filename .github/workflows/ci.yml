@@ -79,6 +79,28 @@ jobs:
           echo "daemon did not become healthy in time" >&2
           exit 1
 
+  cross-platform:
+    name: Cross-platform build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Windows and macOS have their own log-source and machine-identity
+      # implementations behind build tags. Nothing ever compiled them, so a
+      # break there could only be found by a user on that platform.
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test platform-specific packages
+        run: go test ./internal/logs/... ./internal/hostid/... ./internal/collector/...
+
   frontend:
     name: Web dashboard
     runs-on: ubuntu-latest
