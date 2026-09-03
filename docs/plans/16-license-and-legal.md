@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 5 — Docs |
 | **Depends on** | nothing |
-| **Status** | not started |
+| **Status** | **done** — Apache-2.0 |
 
 ## Why
 
