@@ -2,6 +2,9 @@ package collector
 
 import (
 	"math"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sys-sentient/internal/models"
 	"testing"
@@ -118,13 +121,17 @@ func TestCollectReportsFilesystemCapacity(t *testing.T) {
 		if fs.UsedBytes > fs.TotalBytes {
 			t.Errorf("filesystem %q used > total", fs.Mountpoint)
 		}
-		if fs.Mountpoint == "/" {
+		// The system volume is "/" on unix and a drive letter such as "C:\\"
+		// on Windows, so match on whichever root this platform reports for the
+		// current working directory rather than assuming a POSIX layout.
+		if fs.Mountpoint == systemRoot() {
 			foundRoot = true
 		}
 	}
 
 	if !foundRoot {
-		t.Errorf("root filesystem not reported; got %d filesystems", len(state.Filesystems))
+		t.Errorf("system root %q not reported; got %d filesystems: %v",
+			systemRoot(), len(state.Filesystems), mountpoints(state.Filesystems))
 	}
 }
 
@@ -209,4 +216,26 @@ func TestProcessCPUPercentFirstSampleIsZero(t *testing.T) {
 	if _, ok := c.lastProcCPU[999]; !ok {
 		t.Fatal("processCPUPercent() did not record a baseline for the new pid")
 	}
+}
+
+// systemRoot is the mountpoint the OS reports for the volume this test runs
+// from: "/" on unix, "C:\\" or similar on Windows.
+func systemRoot() string {
+	if runtime.GOOS != "windows" {
+		return "/"
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "C:\\"
+	}
+	return filepath.VolumeName(wd) + "\\"
+}
+
+// mountpoints makes a failure message useful rather than just a count.
+func mountpoints(fs []models.Filesystem) []string {
+	out := make([]string, 0, len(fs))
+	for _, f := range fs {
+		out = append(out, f.Mountpoint)
+	}
+	return out
 }
