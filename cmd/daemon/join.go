@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/viper"
 
 	"sys-sentient/internal/hostid"
+	"sys-sentient/internal/service"
 	"sys-sentient/internal/version"
 )
 
@@ -54,6 +55,7 @@ func runJoin(args []string, stdout io.Writer) error {
 		caCert     = fs.String("ca-cert", "", "trust a private CA for the server connection")
 		skipVerify = fs.Bool("insecure-skip-verify", false, "disable TLS verification (last resort)")
 		force      = fs.Bool("force", false, "overwrite an existing config file")
+		installSvc = fs.Bool("install-service", false, "register a service so the agent survives reboot")
 	)
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(stdout, "Usage: sys-sentient agent join --server <url> --token <token>\n\n"+
@@ -138,7 +140,29 @@ func runJoin(args []string, stdout io.Writer) error {
 	}
 	_, _ = fmt.Fprintf(stdout, "Enrolled %q with %s\n", name, base)
 	_, _ = fmt.Fprintf(stdout, "Config written to %s\n", *out)
+
+	if *installSvc {
+		// Enrolment succeeded; a service that fails to register is worth
+		// reporting but must not make the machine look unenrolled.
+		cfg := service.Config{ConfigPath: *out, User: os.Geteuid() != 0, Force: *force}
+		path, err := service.Install(cfg)
+		if err != nil {
+			_, _ = fmt.Fprintf(stdout, "\nEnrolled, but the service could not be installed: %v\n", err)
+			_, _ = fmt.Fprintf(stdout, "Start it manually with:\n  sys-sentient --config %s\n", *out)
+			return nil
+		}
+		_, _ = fmt.Fprintf(stdout, "Service installed: %s\n", path)
+		if err := service.Start(cfg); err != nil {
+			_, _ = fmt.Fprintf(stdout, "warning: could not start it: %v\n", err)
+		} else {
+			_, _ = fmt.Fprintln(stdout, "Started. This machine will keep reporting after a reboot.")
+		}
+		return nil
+	}
+
 	_, _ = fmt.Fprintf(stdout, "\nStart reporting with:\n  sys-sentient --config %s\n", *out)
+	_, _ = fmt.Fprintln(stdout, "\nTo keep it running after a reboot:")
+	_, _ = fmt.Fprintf(stdout, "  sys-sentient service install --config %s\n", *out)
 	return nil
 }
 

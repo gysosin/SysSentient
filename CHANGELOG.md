@@ -9,6 +9,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`sys-sentient service install|uninstall|status`**, and `--install-service`
+  on `agent join`, so an enrolled machine survives logout and reboot. systemd
+  on Linux (system or `--user` scope), launchd on macOS, the service manager on
+  Windows — which also required the daemon to answer service control requests,
+  without which the SCM starts it and then marks it failed. `service status`
+  distinguishes a slow start from a crash loop and names the command to read
+  the logs.
+
 - **Enrol a machine from the dashboard.** Settings → Devices issues a
   single-use join token and shows the exact command to run on the new machine;
   `sys-sentient agent join --server <url> --token <t>` exchanges it for a

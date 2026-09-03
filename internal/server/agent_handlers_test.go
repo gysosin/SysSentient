@@ -183,7 +183,7 @@ func TestIngestAcceptsUnknownFieldsFromNewerAgent(t *testing.T) {
 
 func TestJoinCommandIsPasteable(t *testing.T) {
 	got := joinCommand("https://sentinel.example.com", "abc123")
-	want := "sys-sentient agent join --server https://sentinel.example.com --token abc123"
+	want := "sys-sentient agent join --server https://sentinel.example.com --token abc123 --install-service"
 	if got != want {
 		t.Errorf("joinCommand() = %q, want %q", got, want)
 	}

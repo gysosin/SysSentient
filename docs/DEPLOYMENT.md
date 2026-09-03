@@ -29,12 +29,16 @@ Enrol the machine rather than hand-writing its config. On the server, open
 command it gives you on the machine itself:
 
 ```bash
-sys-sentient agent join --server https://monitor.example.com --token <token>
+sys-sentient agent join --server https://monitor.example.com --token <token> --install-service
 ```
 
 That exchanges the single-use token for a credential belonging to this machine
-alone, writes `agent.yaml` with mode `0600`, and prints how to start it. The
-device appears on the Devices screen once it reports.
+alone, writes `agent.yaml` with mode `0600`, and registers a service so the
+agent survives logout and reboot. The device appears on the Devices screen once
+it reports.
+
+Drop `--install-service` to enrol without registering anything; the command
+then prints how to start the agent by hand.
 
 Useful flags:
 
@@ -44,6 +48,7 @@ Useful flags:
 | `--ca-cert <path>` | Trust a private CA for the server connection. |
 | `--insecure-skip-verify` | Disable TLS verification. Last resort; it makes the connection trivially interceptable. |
 | `--force` | Overwrite an existing config. Refused by default, so re-running the command cannot silently orphan a working credential. |
+| `--install-service` | Register a service so the agent restarts on boot. Uses a per-user service when not run as root. |
 
 Join tokens are single use and expire after an hour by default (24 hours is the
 maximum). Only the hash is stored, so the token is shown once at creation and
@@ -61,6 +66,30 @@ agent:
 
 An agent opens no database and serves no dashboard. It collects on the poll
 interval, batches, and pushes.
+
+### Keeping it running
+
+`--install-service` covers this during enrolment. To add, inspect or remove the
+service later:
+
+```bash
+sys-sentient service install --config /etc/sys-sentient/agent.yaml
+sys-sentient service status
+sys-sentient service uninstall
+```
+
+It writes a systemd unit on Linux, a launchd job on macOS, and registers with
+the service manager on Windows. Add `--user` for a per-user service that needs
+no root — the right choice for an agent enrolled to a config in your home
+directory.
+
+`service status` distinguishes a service that is starting from one that is
+crash-looping, and names the command to read its logs:
+
+```
+Installed: /etc/systemd/system/sys-sentient.service
+State:     stopped (failed: exit-code, 10 restarts -- check the logs: journalctl -u sys-sentient -n 20)
+```
 
 ### Removing a machine
 

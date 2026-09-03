@@ -103,8 +103,12 @@ func (s *Server) handleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // joinCommand renders the line an operator pastes on the joining machine.
+//
+// --install-service is included because an agent that only runs in somebody's
+// shell stops monitoring the moment they close it, which is not what anyone
+// enrolling a machine intends.
 func joinCommand(serverURL, token string) string {
-	return "sys-sentient agent join --server " + serverURL + " --token " + token
+	return "sys-sentient agent join --server " + serverURL + " --token " + token + " --install-service"
 }
 
 // publicURL reconstructs the address the agent should call back on.
