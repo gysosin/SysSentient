@@ -33,12 +33,31 @@ func ParseLevel(level string) slog.Level {
 	}
 }
 
+// level is the live severity threshold.
+//
+// A slog.LevelVar rather than a fixed level, so the threshold can be changed
+// on a running daemon. Turning on debug logging is the first thing anyone does
+// when investigating, and having to restart to do it discards the state being
+// investigated.
+var level = new(slog.LevelVar)
+
+// SetLevel changes the severity threshold of every logger built by New.
+//
+// Safe to call concurrently: slog.LevelVar exists for exactly this.
+func SetLevel(l string) {
+	level.Set(ParseLevel(l))
+}
+
+// Level reports the current threshold.
+func Level() slog.Level { return level.Level() }
+
 // New builds a logger writing to w.
 //
 // Everything goes to a single stream: splitting informational output across
 // stdout and stderr made the daemon's own logs impossible to follow.
 func New(w io.Writer, opts Options) *slog.Logger {
-	handlerOpts := &slog.HandlerOptions{Level: ParseLevel(opts.Level)}
+	level.Set(ParseLevel(opts.Level))
+	handlerOpts := &slog.HandlerOptions{Level: level}
 
 	var handler slog.Handler
 	if strings.EqualFold(strings.TrimSpace(opts.Format), "json") {

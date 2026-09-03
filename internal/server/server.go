@@ -49,12 +49,21 @@ type Server struct {
 	sessionMax   time.Duration
 	// setupToken is non-nil only until the first admin exists.
 	setupToken *auth.SetupToken
+	// runtime holds the settings that can change without a restart. Nil in
+	// agent mode, which has no API to change them through.
+	runtime *config.Runtime
 }
 
 type logCollector interface {
 	GetLogsWithTimeout(time.Duration) (string, error)
 	GetLogsContextWithTimeout(context.Context, time.Duration) (string, error)
 }
+
+// SetRuntime attaches the live-settings store.
+//
+// A setter rather than another NewServer parameter: the constructor already
+// takes six, and agent mode legitimately has none of this.
+func (s *Server) SetRuntime(rt *config.Runtime) { s.runtime = rt }
 
 func NewServer(cfg config.ServerConfig, privacy config.PrivacyConfig, store *storage.Store, aiService *ai.AIService, evaluator *alerting.Evaluator, dispatcher *alerting.Dispatcher) *Server {
 	hub := NewHub()
@@ -146,6 +155,10 @@ func (s *Server) routes() http.Handler {
 	// Admin only: anything that spends money, changes state, or manages people.
 	mux.HandleFunc("POST /api/analyze", s.requireAdmin(rateLimit(s.analyzeLimiter, "60", s.handleAnalyze)))
 	mux.HandleFunc("POST /api/alerts/{ruleID}/acknowledge", s.requireAdmin(s.handleAcknowledgeAlert))
+	mux.HandleFunc("GET /api/settings", s.requireAuth(s.handleGetRuntimeSettings))
+	// Admin-only: the poll interval controls the load this daemon puts on the
+	// host, and retention controls how much history exists at all.
+	mux.HandleFunc("PATCH /api/settings", s.requireAdmin(s.handleUpdateRuntimeSettings))
 	mux.HandleFunc("GET /api/users", s.requireAdmin(s.handleListUsers))
 	mux.HandleFunc("POST /api/users", s.requireAdmin(s.handleCreateUser))
 	mux.HandleFunc("DELETE /api/users/{id}", s.requireAdmin(s.handleDeleteUser))

@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 4 — Console |
 | **Depends on** | 14 |
-| **Status** | not started |
+| **Status** | **done** — interval, retention and log level apply live |
 
 ## Why
 

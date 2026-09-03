@@ -147,7 +147,19 @@ func main() {
 		interval = 2 * time.Second
 	}
 	logger.Info("collector started", "interval", interval)
+	// Live settings. Changing the poll interval retimes this ticker in place
+	// rather than requiring a restart, which is what the setting is for.
+	runtime := config.NewRuntime(cfg)
 	ticker := time.NewTicker(interval)
+	runtime.OnPollIntervalChange(func(d time.Duration) {
+		ticker.Reset(d)
+		logger.Info("collector poll interval changed", "interval", d)
+	})
+	runtime.OnLogLevelChange(func(level string) {
+		logging.SetLevel(level)
+		logger.Info("log level changed", "level", level)
+	})
+	srv.SetRuntime(runtime)
 	defer ticker.Stop()
 
 	// Database Maintenance Ticker (Every 1 hour)
@@ -188,10 +200,11 @@ func main() {
 			// Roll up before pruning, never after: PruneTiers deletes the raw
 			// samples the rollup reads, so reversing these two loses the
 			// history permanently rather than aggregating it.
+			rawHours, minuteDays, fiveMinuteDays := runtime.Retention()
 			policy := storage.RetentionPolicy{
-				RawHours:       cfg.Database.MetricsRetentionHours,
-				MinuteDays:     cfg.Database.MinuteRollupDays,
-				FiveMinuteDays: cfg.Database.FiveMinuteRollupDays,
+				RawHours:       rawHours,
+				MinuteDays:     minuteDays,
+				FiveMinuteDays: fiveMinuteDays,
 			}
 			if err := store.Rollup(policy, time.Now()); err != nil {
 				logger.Error("error rolling up metrics", "error", err)
