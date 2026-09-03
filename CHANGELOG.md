@@ -22,6 +22,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the credentials themselves.
 - `server.public_url`, so the enrolment command is correct behind a reverse
   proxy, where the request's `Host` is the proxy's own name.
+- Wiki pages — Home, FAQ, Adding a machine, Troubleshooting — written and
+  version-controlled in `docs/wiki/`, so they are reviewed with the code.
 
 ### Changed
 
