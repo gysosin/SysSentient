@@ -113,6 +113,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- **Password verification now decodes the stored hash strictly.** Go's
+  non-strict base64 decoder ignores the trailing padding bits of the final
+  character, and a 32-byte argon2id key encodes to 43 characters whose last one
+  carries only 4 significant bits. Two different stored strings therefore
+  decoded to the same key and both verified. Now rejected as a malformed hash.
 - Go toolchain raised to 1.25.13. `govulncheck` reported **9 standard-library
   vulnerabilities reachable from this code** on 1.25.10, including
   `crypto/x509` certificate verification (reached from `Server.Start`) and
