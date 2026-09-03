@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 5 — Docs |
 | **Depends on** | 16 |
-| **Status** | not started |
+| **Status** | **done** — one home per topic, all links verified |
 
 ## Why
 

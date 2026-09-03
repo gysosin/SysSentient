@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest something SysSentient should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is hard or impossible today?
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Optional. The problem matters more than the proposed solution.
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Roadmap
+      options:
+        - label: I checked [docs/ROADMAP.md](https://github.com/gysosin/SysSentient/blob/main/docs/ROADMAP.md) and the open plans

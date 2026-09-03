@@ -101,6 +101,16 @@ jobs:
       - name: Test platform-specific packages
         run: go test ./internal/logs/... ./internal/hostid/... ./internal/collector/...
 
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Runs here as well as in the deploy workflow, so a broken landing page
+      # fails the pull request rather than only failing after merge.
+      - name: Verify the site
+        run: python3 tool/verify_site.py
+
   frontend:
     name: Web dashboard
     runs-on: ubuntu-latest
