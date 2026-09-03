@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Windows and macOS support for log collection and machine identity.** Log
+  sources are now a per-platform list: journalctl/dmesg/syslog on Linux, the
+  System and Application event logs via `wevtutil` on Windows, and the unified
+  log via `log show` on macOS. Machine identity likewise reads
+  `/etc/machine-id`, the registry `MachineGuid`, or `IOPlatformUUID`. Without
+  the last of these, a rename on Windows silently started a new history.
+
 - **Login and user accounts** (`internal/auth`, `internal/server/auth_handlers.go`,
   `internal/server/user_handlers.go`) — argon2id password hashing encoded as PHC
   strings, server-issued session cookies (`HttpOnly`, `SameSite=Strict`,
