@@ -24,7 +24,12 @@ before:
 builds:
   - id: sys-daemon
     main: ./cmd/daemon
-    binary: sys-daemon
+    # The binary is named for the product, not for its role. It was `sys-daemon`
+    # while the service unit, the package, the config directory and the docs all
+    # said `sys-sentient` -- so the enrolment command the dashboard tells you to
+    # paste named a binary that did not exist on an installed system. A
+    # `sys-daemon` symlink below keeps existing scripts working.
+    binary: sys-sentient
     env:
       # Pure Go all the way down; this is what makes the matrix below possible.
       - CGO_ENABLED=0
@@ -79,6 +84,11 @@ nfpms:
       - src: sys-sentient.service
         dst: /lib/systemd/system/sys-sentient.service
         type: config
+      # Compatibility with installs and scripts from v0.1.0-beta.1, which
+      # shipped the binary under its old name.
+      - src: /usr/bin/sys-sentient
+        dst: /usr/bin/sys-daemon
+        type: symlink
       - src: config.yaml.example
         dst: /etc/sys-sentient/config.yaml.example
       # Marked noreplace so an upgrade never overwrites an operator's edited
@@ -133,7 +143,7 @@ release:
     **Debian/Ubuntu** — `sudo dpkg -i sys-sentient_{{ .Version }}_linux_amd64.deb`
     **Fedora/RHEL** — `sudo rpm -i sys-sentient_{{ .Version }}_linux_amd64.rpm`
     **Alpine** — `sudo apk add --allow-untrusted sys-sentient_{{ .Version }}_linux_amd64.apk`
-    **Windows / macOS** — download the archive below and run `sys-daemon`.
+    **Windows / macOS** — download the archive below and run `sys-sentient`.
 
     The dashboard is embedded in the binary, so it serves from any directory.
 

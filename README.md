@@ -123,7 +123,7 @@ database and its write-ahead log as two files that must agree, and a copy taken
 between them is corrupt.
 
 ```bash
-sys-daemon --backup /var/backups/sys-sentient-$(date +%F).db
+sys-sentient --backup /var/backups/sys-sentient-$(date +%F).db
 ```
 
 ## Privacy

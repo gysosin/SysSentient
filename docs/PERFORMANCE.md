@@ -41,7 +41,7 @@ measuring shell's own arguments and will happily report 0.00% for a process
 that is not the daemon.
 
 ```bash
-PID=$(pgrep -x sys-daemon | head -1)
+PID=$(pgrep -x sys-sentient | head -1)
 T1=$(awk '{print $14+$15}' /proc/$PID/stat); sleep 40; T2=$(awk '{print $14+$15}' /proc/$PID/stat)
 awk -v a="$T1" -v b="$T2" 'BEGIN{printf "idle CPU: %.2f%%\n", (b-a)/100/40*100}'
 awk '/VmRSS/{print "RSS:", $2, $3}' /proc/$PID/status

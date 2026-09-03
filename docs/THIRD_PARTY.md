@@ -41,7 +41,7 @@ go run github.com/google/go-licenses@latest report ./...
 
 ## Bundled typefaces
 
-**These ship as binaries inside `sys-daemon`**, embedded through
+**These ship as binaries inside `sys-sentient`**, embedded through
 `web/embed.go`, so their terms travel with every copy of the product.
 
 | Typeface | Licence | Copyright |

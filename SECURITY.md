@@ -8,7 +8,7 @@ the maintainer.
 
 [gh]: https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability
 
-Include the version (`sys-daemon --version`), how to reproduce, and what an
+Include the version (`sys-sentient --version`), how to reproduce, and what an
 attacker could achieve. Expect an acknowledgement within a few days.
 
 ## Supported versions

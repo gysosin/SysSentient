@@ -41,5 +41,5 @@ Version, commit and build date are injected with `-ldflags -X` into
 `internal/version`. They surface in `--version`, the start-up log line,
 `GET /health` and the dashboard footer.
 
-`make daemon` runs `./sys-daemon --version` as a self-check, so a broken stamp
+`make daemon` runs `./sys-sentient --version` as a self-check, so a broken stamp
 fails the build rather than shipping.

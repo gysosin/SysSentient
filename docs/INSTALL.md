@@ -43,7 +43,7 @@ no default password at any point.
 
 ## Windows and macOS
 
-Download the archive, extract it, and run `sys-daemon`. Metric collection works
+Download the archive, extract it, and run `sys-sentient`. Metric collection works
 on both; see [ARCHITECTURE.md](ARCHITECTURE.md#platform-support) for what
 differs.
 
@@ -64,7 +64,7 @@ Images are multi-arch (amd64 and arm64).
 
 ```bash
 make build      # dashboard, then daemon
-./sys-daemon
+./sys-sentient
 ```
 
 `make help` lists every target. The dashboard must be built before the daemon,

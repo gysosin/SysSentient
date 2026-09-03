@@ -38,7 +38,7 @@ on exactly the deployments that matter.
 Metrics, AI insights, alert history, users and sessions live in one SQLite file
 at `database.path`. Passwords are stored as argon2id hashes, never reversibly.
 
-The file contains credentials, so back it up with `sys-daemon --backup`, which
+The file contains credentials, so back it up with `sys-sentient --backup`, which
 writes it `0600`, rather than copying it — see [INSTALL.md](INSTALL.md) and
 the note on `cp` in [PERFORMANCE.md](PERFORMANCE.md).
 
