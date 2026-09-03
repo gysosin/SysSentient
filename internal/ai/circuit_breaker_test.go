@@ -45,7 +45,7 @@ func TestCircuitBreaker_OpenAfterFailures(t *testing.T) {
 		return nil
 	})
 
-	if err != ErrCircuitOpen {
+	if !errors.Is(err, ErrCircuitOpen) {
 		t.Errorf("Expected ErrCircuitOpen, got %v", err)
 	}
 }
@@ -104,7 +104,7 @@ func TestCircuitBreaker_AllowsOnlyOneHalfOpenProbe(t *testing.T) {
 		t.Fatal("second half-open request should not execute")
 		return nil
 	})
-	if err != ErrTooManyRequests {
+	if !errors.Is(err, ErrTooManyRequests) {
 		t.Fatalf("expected ErrTooManyRequests, got %v", err)
 	}
 

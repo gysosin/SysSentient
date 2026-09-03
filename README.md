@@ -1,101 +1,158 @@
 # SysSentient
 
-SysSentient is an intelligent system monitor that uses Google Gemini AI to analyze system metrics and logs.
+Self-hosted Linux system monitor with alerting, a live dashboard, and optional
+AI-assisted analysis via Google Gemini.
+
+- **Metrics** — CPU (total and per-core), memory, swap, disk I/O, **filesystem
+  capacity**, network, load averages, temperature, uptime, and top processes by
+  *current* CPU usage.
+- **Alerting** — threshold rules with a required duration, so transient spikes
+  do not page you. Webhook and Slack notifications, acknowledgement, and history.
+- **Dashboard** — Overview, Processes, Logs, AI Insights, Alerts and Settings.
+- **Integrations** — Prometheus `/metrics`, JSON logs, a `/health` endpoint that
+  reports collector liveness rather than just "the process is up".
+
+> **Status:** pre-1.0 and **not yet licensed** — see [Licensing](#licensing).
+> Read [SECURITY.md](SECURITY.md) before exposing it beyond localhost; the
+> daemon serves plain HTTP, so terminate TLS in front of it.
 
 ## Architecture
 
-- **Daemon (`sys-daemon`)**: Go application that collects metrics, stores them in SQLite, and exposes a JSON API. It also handles AI analysis.
-- **Web UI**: React application that visualizes metrics and provides an interface for AI insights.
+- **Daemon (`sys-daemon`)** — collects metrics, stores them in SQLite, evaluates
+  alert rules, and serves the JSON API, WebSocket stream and dashboard.
+- **Dashboard (`web/`)** — React 19 + Vite + Tailwind v4 single-page app.
 
-## Prerequisites
+## Quick start
 
-- Go 1.25.10+ or Go toolchain auto-download enabled
-- Node.js 22+
-- Google Gemini API Key
-
-## Building
-
-### 1. Build the Web Interface
 ```bash
-cd web
-npm install
-npm run build
-cd ..
+make build      # dashboard + daemon
+./sys-daemon    # dashboard on http://localhost:8080
 ```
 
-### 2. Build the Daemon
+`make help` lists every target. Without a Gemini API key the daemon runs fine
+with AI analysis disabled and nothing leaves the machine.
+
+### Container
+
 ```bash
-go build -o sys-daemon ./cmd/daemon
+docker compose up --build
 ```
 
-### Container Image
+Or directly:
+
 ```bash
 docker build -t sys-sentient .
-docker run --rm -p 8080:8080 \
+docker run --rm -p 127.0.0.1:8080:8080 \
   -v sys-sentient-data:/var/lib/sys-sentient \
-  -e SYS_SENTIENT_SERVER_API_KEY="your_dashboard_key" \
-  -e SYS_SENTIENT_GEMINI_API_KEY="your_api_key" \
   sys-sentient
 ```
 
-The container writes SQLite data to `/var/lib/sys-sentient`; keep that path on
-a named volume for persistent metrics and insight history.
-
-## Running
-
-Ensure `web/dist` exists (from step 1).
-
-```bash
-export SYS_SENTIENT_GEMINI_API_KEY="your_api_key"
-export SYS_SENTIENT_SERVER_API_KEY="your_dashboard_key" # recommended
-./sys-daemon
-```
-
-Access the dashboard at `http://localhost:8080`.
-If API authentication is enabled, build the web UI with
-`VITE_SYS_SENTIENT_API_KEY` set to the same dashboard key.
-
-By default, the daemon keeps 24 hours of metrics and 7 days of AI insight
-history to keep the local SQLite database bounded.
-
 ## Configuration
 
-Configuration can be set via `config.yaml` or Environment Variables.
+Copy [`config.yaml.example`](config.yaml.example) to `config.yaml`, or use
+environment variables — every key maps to `SYS_SENTIENT_` + the path in caps
+with dots as underscores (`alerting.webhook_url` →
+`SYS_SENTIENT_ALERTING_WEBHOOK_URL`).
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SYS_SENTIENT_SERVER_PORT` | 8080 | Web Server Port |
-| `SYS_SENTIENT_SERVER_API_KEY` | - | Optional API key for `/api/*` and `/ws/*` |
-| `SYS_SENTIENT_SERVER_ALLOWED_ORIGINS` | `http://localhost:8080,http://localhost:5173` | CORS/WebSocket origin allowlist |
-| `SYS_SENTIENT_DATABASE_METRICS_RETENTION_HOURS` | 24 | Metrics retention window |
-| `SYS_SENTIENT_DATABASE_INSIGHTS_RETENTION_HOURS` | 168 | AI insight retention window |
-| `SYS_SENTIENT_GEMINI_API_KEY` | - | Gemini API key; AI is disabled when omitted |
-| `SYS_SENTIENT_GEMINI_MODEL_NAME` | gemini-2.5-flash-lite | AI Model |
-| `SYS_SENTIENT_COLLECTOR_POLL_INTERVAL_SECONDS` | 2 | Metrics Poll Rate |
+| Key | Default | Description |
+|-----|---------|-------------|
+| `server.port` | 8080 | Web server port |
+| `server.api_key` | – | Machine token for scripts (`X-API-Key`). Browser users sign in. See [SECURITY.md](SECURITY.md) |
+| `server.insecure` | false | Disables authentication entirely. Warned on every start |
+| `auth.session_idle_hours` | 24 | Sign out after this much inactivity |
+| `auth.session_max_days` | 30 | Absolute session lifetime |
+| `auth.login_rate_per_minute` | 5 | Password attempts per client IP |
+| `server.allowed_origins` | localhost:8080, :3000, :5173 | CORS/WebSocket origin allowlist |
+| `logging.level` | info | `debug` adds a line per sample |
+| `logging.format` | text | `json` for log aggregators |
+| `collector.poll_interval_seconds` | 2 | Sampling interval |
+| `collector.top_processes` | 10 | Processes recorded per sample |
+| `database.metrics_retention_hours` | 24 | Metrics retention |
+| `database.insights_retention_hours` | 168 | AI insight and alert history retention |
+| `alerting.enabled` | true | Evaluate alert rules |
+| `alerting.webhook_url` | – | Receives raw alert JSON per transition |
+| `alerting.slack_webhook_url` | – | Slack incoming webhook |
+| `gemini.api_key` | – | AI is disabled entirely when empty |
+| `gemini.model_name` | gemini-2.5-flash-lite | Model |
+| `gemini.max_daily_cost` | 1.0 | Hard USD cap per UTC day; 0 disables |
+| `privacy.mask_{ips,emails,usernames}` | true | Redaction before anything reaches Gemini |
 
-## Installation (Linux Systemd)
+## Alerting
 
-1. Create a dedicated service account.
-   ```bash
-   sudo useradd --system --home-dir /var/lib/sys-sentient --shell /usr/sbin/nologin --groups systemd-journal sys-sentient
-   ```
-2. Move binary and web assets to `/opt/sys-sentient`.
-   ```bash
-   sudo mkdir -p /opt/sys-sentient
-   sudo cp sys-daemon /opt/sys-sentient/
-   sudo cp -r web/dist /opt/sys-sentient/web/dist
-   sudo chown -R root:root /opt/sys-sentient
-   ```
-3. Install service file.
-   ```bash
-   sudo cp sys-sentient.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now sys-sentient
-   ```
+Six rules ship enabled by default, covering sustained CPU, memory exhaustion,
+swap pressure, filesystem capacity, load average and temperature. Each requires
+its condition to hold for a duration before firing, which is what stops a build
+spike from paging you.
 
-## Features
+Set `alerting.webhook_url` or `alerting.slack_webhook_url` to be notified. With
+neither set, alerts still appear in the dashboard and the daemon warns at start-up
+that nobody will be told.
 
-- Real-time CPU, memory, swap, disk, network, load, and temperature metrics.
-- Top processes list with CPU, memory, and user context.
-- **AI Analysis**: Detects anomalies and provides health summaries using Gemini AI.
-- PII Scrubbing: Automatically redacts sensitive info (IPs, Emails) before sending to AI.
+Rules are currently built in; editing them from the browser is not implemented yet.
+
+## API
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /health` | public | Status, version, database and collector liveness |
+| `GET /metrics` | public | Prometheus exposition |
+| `GET /api/metrics` | key | Recent samples |
+| `GET /api/insights` | key | Recent AI insights |
+| `GET /api/logs` | key | Recent system logs (rate limited) |
+| `POST /api/analyze` | key | Trigger AI analysis (rate limited — costs money) |
+| `GET /api/alerts` | key | Pending and firing alerts |
+| `GET /api/alerts/rules` | key | Configured rules |
+| `GET /api/alerts/history` | key | Recent transitions |
+| `POST /api/alerts/{ruleID}/acknowledge` | key | Silence an active alert |
+| `GET /ws/metrics` | key | Live metric stream |
+
+## Privacy
+
+Nothing leaves the machine unless `gemini.api_key` is set. There is no
+telemetry, analytics or phone-home. When AI analysis is enabled, the current
+sample and recent logs are sent to Google Gemini with IPv4/IPv6 addresses,
+e-mail addresses and home-directory usernames redacted first.
+
+**AI-suggested commands are generated by a language model and are not validated
+by the daemon.** The dashboard only copies them to the clipboard; it never runs
+them. Read them before you do.
+
+## Installation (systemd)
+
+```bash
+sudo useradd --system --home-dir /var/lib/sys-sentient --shell /usr/sbin/nologin --groups systemd-journal sys-sentient
+sudo mkdir -p /opt/sys-sentient
+sudo cp sys-daemon /opt/sys-sentient/
+sudo cp -r web/dist /opt/sys-sentient/web/dist
+sudo cp sys-sentient.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now sys-sentient
+```
+
+> The shipped unit sets `ProtectKernelLogs=true` and drops all capabilities, so
+> `dmesg` collection cannot work under it. journald remains available and is the
+> primary log source.
+
+## Platform support
+
+Linux only in practice. Metric collection is cross-platform via gopsutil, but
+log collection (`journalctl`, `dmesg`, `/var/log/syslog`), the systemd unit and
+the container image are all Linux-specific.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). `make verify` runs everything CI runs.
+
+## Licensing
+
+**This project does not yet have a LICENSE file**, which means it is "all rights
+reserved" by default: no one else may redistribute or modify it. A license must
+be chosen before publishing or selling. All dependencies are MIT/BSD/Apache with
+no copyleft, so any model — permissive, source-available or proprietary — is
+available.
+
+## Documentation
+
+- [CHANGELOG.md](CHANGELOG.md) — what changed
+- [SECURITY.md](SECURITY.md) — reporting, and known limitations
+- [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow
+- [QUICK_START.md](QUICK_START.md) — troubleshooting and operational tips

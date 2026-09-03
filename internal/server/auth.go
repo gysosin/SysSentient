@@ -5,6 +5,9 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strings"
+	"time"
+
+	"sys-sentient/internal/auth"
 )
 
 // AuthMiddleware provides API key authentication
@@ -74,4 +77,62 @@ func (a *AuthMiddleware) validAPIKey(providedKey string) bool {
 
 func isProtectedRouteNamespace(path string) bool {
 	return path == "/api" || strings.HasPrefix(path, "/api/") || path == "/ws" || strings.HasPrefix(path, "/ws/")
+}
+
+func apiKeyFromRequest(r *http.Request) string {
+	if k := r.Header.Get("X-API-Key"); k != "" {
+		return k
+	}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		return strings.TrimPrefix(h, "Bearer ")
+	}
+	return ""
+}
+
+// authenticate resolves the caller: insecure mode, then the machine key,
+// then a session cookie. Query-string credentials are deliberately not read.
+func (s *Server) authenticate(r *http.Request) (principal, bool) {
+	if s.config.Insecure {
+		return insecurePrincipal, true
+	}
+	if key := apiKeyFromRequest(r); key != "" && s.authMiddleware.validAPIKey(key) {
+		return apiKeyPrincipal, true
+	}
+	return s.resolveSession(r, time.Now())
+}
+
+func isMutating(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	return true
+}
+
+// requireAuth gates a handler on any authenticated principal. Cookie
+// sessions additionally refuse cross-site mutations: SameSite=Strict already
+// stops browsers sending the cookie, this is the belt to that brace.
+func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p, ok := s.authenticate(r)
+		if !ok {
+			writeJSONError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		if p.viaCookie && isMutating(r.Method) && strings.EqualFold(r.Header.Get("Sec-Fetch-Site"), "cross-site") {
+			writeJSONError(w, http.StatusForbidden, "cross-site request rejected")
+			return
+		}
+		next(w, r.WithContext(withPrincipal(r.Context(), p)))
+	}
+}
+
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if p, _ := principalFrom(r.Context()); p.user.Role != auth.RoleAdmin {
+			writeJSONError(w, http.StatusForbidden, "admin role required")
+			return
+		}
+		next(w, r)
+	})
 }

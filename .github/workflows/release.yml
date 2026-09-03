@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  binaries:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build dashboard
+        working-directory: web
+        run: npm ci && npm run build
+
+      # NOTE: only linux/amd64 for now. The SQLite driver is cgo-based
+      # (mattn/go-sqlite3), so cross-compiling to arm64 needs a full C
+      # toolchain. Switching to modernc.org/sqlite would allow CGO_ENABLED=0
+      # and a plain GOOS/GOARCH matrix — tracked as a follow-up.
+      - name: Build binary
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p dist
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+            -trimpath \
+            -ldflags "-s -w \
+              -X sys-sentient/internal/version.Version=${VERSION} \
+              -X sys-sentient/internal/version.Commit=${COMMIT} \
+              -X sys-sentient/internal/version.BuildDate=${DATE}" \
+            -o dist/sys-daemon ./cmd/daemon
+          ./dist/sys-daemon --version
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          cd dist
+          cp -r ../web/dist ./web-dist
+          cp ../README.md ../CHANGELOG.md ../SECURITY.md ../config.yaml.example ../sys-sentient.service .
+          tar -czf "sys-sentient_${GITHUB_REF_NAME}_linux_amd64.tar.gz" \
+            sys-daemon web-dist README.md CHANGELOG.md SECURITY.md config.yaml.example sys-sentient.service
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
+          body: |
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+
+            **Verify your download**
+            ```
+            sha256sum -c checksums.txt
+            ```
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}

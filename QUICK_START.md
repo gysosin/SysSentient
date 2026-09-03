@@ -24,22 +24,10 @@ cd ..
 go build -o sys-daemon ./cmd/daemon
 ```
 
-### 3. Configure API Keys
+### 3. Configure the AI (optional)
 ```bash
-# Required: Google Gemini API Key
+# Without this the daemon runs fine; AI analysis is simply disabled.
 export SYS_SENTIENT_GEMINI_API_KEY="your-gemini-api-key"
-
-# Recommended: Set authentication
-export SYS_SENTIENT_SERVER_API_KEY="your-secure-random-key"
-```
-
-If API authentication is enabled and you serve the built dashboard, expose the
-same dashboard key to Vite at build time:
-
-```bash
-cd web
-VITE_SYS_SENTIENT_API_KEY="$SYS_SENTIENT_SERVER_API_KEY" npm run build
-cd ..
 ```
 
 ### 4. Run the Daemon
@@ -47,11 +35,20 @@ cd ..
 ./sys-daemon
 ```
 
-### 5. Access Dashboard
-Open browser: `http://localhost:8080`
+### 5. Create the first admin
+On first start the daemon has no accounts, so it prints a one-time setup token:
 
-If `SYS_SENTIENT_SERVER_API_KEY` is set, the built dashboard must be created
-with matching `VITE_SYS_SENTIENT_API_KEY`. Do not commit real keys to source.
+```
+level=WARN msg="FIRST-RUN SETUP REQUIRED: no users exist yet"
+      url=http://localhost:8080/setup token=<43-character token>
+```
+
+Open that URL, paste the token, and choose an email and a password of at least
+12 characters. There is no default password. Afterwards sign in at
+`http://localhost:8080/login`; add more users under **Settings → Users**.
+
+Scripts authenticate separately with `SYS_SENTIENT_SERVER_API_KEY`, sent as an
+`X-API-Key` header. Do not commit real keys to source.
 
 ---
 
@@ -70,17 +67,18 @@ openssl rand -base64 32
 export SYS_SENTIENT_SERVER_API_KEY="your-generated-key"
 ```
 
-### Configure Frontend Auth
-For local Vite development, create `web/.env.local`:
+### Frontend auth
+Nothing to configure. The dashboard is served by the daemon itself, so it calls
+the API same-origin and the browser attaches the session cookie automatically.
 
-```bash
-VITE_SYS_SENTIENT_API_KEY=your-generated-key
-```
+For local Vite development (`npm run dev` on port 3000), `vite.config.ts`
+proxies `/api`, `/health` and `/ws` to the daemon on port 8080, so the same
+cookie works there too.
 
-For static production builds, pass the same variable when running
-`npm run build`. Vite exposes `VITE_` variables to browser code, so use this
-only for the dashboard access key and keep provider secrets such as Gemini keys
-server-side.
+The dashboard bundle no longer contains any credential. The earlier
+`VITE_SYS_SENTIENT_API_KEY` build variable has been removed: Vite inlined it
+into the published JavaScript, where anyone who could load the page could read
+it.
 
 ---
 
@@ -247,7 +245,7 @@ df -h .
 
 ## 🎯 Next Steps
 
-1. ✅ Review [IMPROVEMENTS.md](IMPROVEMENTS.md) for detailed changes
+1. ✅ Review [CHANGELOG.md](CHANGELOG.md) for recent changes
 2. ✅ Configure authentication for security
 3. ✅ Set up systemd service for auto-start
 4. ✅ Add to monitoring/alerting system
@@ -267,7 +265,9 @@ df -h .
 ## 📚 Additional Resources
 
 - Main README: [README.md](README.md)
-- Improvements Log: [IMPROVEMENTS.md](IMPROVEMENTS.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Security notes: [SECURITY.md](SECURITY.md)
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Architecture Review: [architecture_review.md](architecture_review.md)
 - Project Plan: [plan.md](plan.md)
 

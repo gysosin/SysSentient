@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import AIInsightPanel from './AIInsightPanel.js';
@@ -23,7 +23,7 @@ function renderAnalysisID(): string {
   const html = renderToStaticMarkup(
     <AIInsightPanel analysis={analysis} error={null} loading={false} onRefresh={() => undefined} />,
   );
-  const match = html.match(/ID: ([A-Z0-9]+)/);
+  const match = html.match(/#([A-Z0-9]+)/);
   assert.ok(match, `expected rendered AI panel to include an analysis ID: ${html}`);
   return match[1];
 }

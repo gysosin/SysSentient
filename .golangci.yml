@@ -1,0 +1,42 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - nilerr
+    - unconvert
+    - whitespace
+
+  settings:
+    gosec:
+      excludes:
+        # The daemon deliberately runs journalctl/dmesg/tail with a fixed
+        # argument list; the command is not user-controlled.
+        - G204
+    errcheck:
+      exclude-functions:
+        # Response encoding errors are unrecoverable at that point: the status
+        # line is already written.
+        - (*encoding/json.Encoder).Encode
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt

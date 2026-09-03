@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"sys-sentient/internal/models"
 
@@ -23,13 +24,29 @@ func NewStore(dbPath string) (*Store, error) {
 	db.SetMaxIdleConns(1)
 
 	if err := createTable(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	// Run migrations for new columns
 	if err := migrateSchema(db); err != nil {
-		db.Close()
+		_ = db.Close()
+		return nil, err
+	}
+
+	// Indexes over migrated columns, once those columns exist.
+	if err := createPostMigrationIndexes(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := createAuthTables(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	// Rewrite any pre-existing local-time timestamps into UTC.
+	if err := normalizeStoredTimestamps(db); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -74,8 +91,105 @@ func createTable(db *sql.DB) error {
 		content TEXT
 	);
 	`
-	_, err = db.Exec(queryInsights)
-	return err
+	if _, err = db.Exec(queryInsights); err != nil {
+		return err
+	}
+
+	// insights is queried with ORDER BY timestamp DESC on every dashboard poll
+	// and had no index at all — a full scan plus sort every time.
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_insights_timestamp ON insights(timestamp);`); err != nil {
+		return fmt.Errorf("failed to create insights index: %w", err)
+	}
+
+	queryAlertEvents := `
+	CREATE TABLE IF NOT EXISTS alert_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		occurred_at DATETIME NOT NULL,
+		rule_id TEXT NOT NULL,
+		rule_name TEXT NOT NULL,
+		metric TEXT NOT NULL,
+		state TEXT NOT NULL,
+		severity TEXT NOT NULL,
+		value REAL NOT NULL,
+		threshold REAL NOT NULL,
+		hostname TEXT NOT NULL DEFAULT ''
+	);
+	`
+	if _, err = db.Exec(queryAlertEvents); err != nil {
+		return fmt.Errorf("failed to create alert_events table: %w", err)
+	}
+
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_alert_events_occurred ON alert_events(occurred_at);`); err != nil {
+		return fmt.Errorf("failed to create alert events index: %w", err)
+	}
+
+	// Fleet inventory. Kept separate from metrics so a host stays visible (and
+	// its last-seen age meaningful) after its samples have been pruned.
+	queryHosts := `
+	CREATE TABLE IF NOT EXISTS hosts (
+		host_id TEXT PRIMARY KEY,
+		hostname TEXT NOT NULL DEFAULT '',
+		first_seen DATETIME NOT NULL,
+		last_seen DATETIME NOT NULL,
+		agent_version TEXT NOT NULL DEFAULT '',
+		labels TEXT NOT NULL DEFAULT '{}'
+	);
+	`
+	if _, err = db.Exec(queryHosts); err != nil {
+		return fmt.Errorf("failed to create hosts table: %w", err)
+	}
+
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_hosts_last_seen ON hosts(last_seen);`); err != nil {
+		return fmt.Errorf("failed to create hosts index: %w", err)
+	}
+
+	return nil
+}
+
+// createPostMigrationIndexes builds indexes over columns that are added by
+// migrateSchema, so they cannot be created in createTable — at that point the
+// columns do not exist yet on an upgraded database.
+func createPostMigrationIndexes(db *sql.DB) error {
+	// Host-scoped time queries are the common access pattern once more than one
+	// machine reports; a bare timestamp index makes them scan every host.
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_metrics_host_time ON metrics(host_id, timestamp);`); err != nil {
+		return fmt.Errorf("failed to create metrics host/time index: %w", err)
+	}
+	return nil
+}
+
+// normalizeStoredTimestamps rewrites timestamps that were persisted as local
+// wall time with a UTC offset into plain UTC, so all rows compare and sort
+// consistently against datetime('now').
+//
+// SQLite's datetime() parses the offset form and returns UTC, so the conversion
+// is done in SQL. Rows already in the plain UTC form contain no '+' and no
+// trailing offset, and are left untouched — the WHERE clause makes this
+// idempotent and cheap on subsequent starts.
+func normalizeStoredTimestamps(db *sql.DB) error {
+	statements := []struct {
+		table  string
+		column string
+	}{
+		{table: "metrics", column: "timestamp"},
+		{table: "insights", column: "timestamp"},
+		{table: "alert_events", column: "occurred_at"},
+	}
+
+	for _, stmt := range statements {
+		// SQL identifiers cannot be bound as parameters. Both values come from
+		// the hardcoded list above — never from config, a request or the
+		// database — so there is no injection surface here.
+		query := fmt.Sprintf( // #nosec G201 -- identifiers from the fixed list above
+			`UPDATE %s SET %s = datetime(%s)
+			 WHERE %s LIKE '%%+%%' OR %s LIKE '%%Z' OR %s LIKE '%%_-__:__'`,
+			stmt.table, stmt.column, stmt.column, stmt.column, stmt.column, stmt.column,
+		)
+		if _, err := db.Exec(query); err != nil {
+			return fmt.Errorf("failed to normalize %s.%s: %w", stmt.table, stmt.column, err)
+		}
+	}
+	return nil
 }
 
 // migrateSchema adds new columns to existing tables
@@ -94,6 +208,12 @@ func migrateSchema(db *sql.DB) error {
 		{"load_avg_15", "REAL DEFAULT 0"},
 		{"temperature", "REAL DEFAULT 0"},
 		{"processes", "TEXT DEFAULT '[]'"},
+		{"uptime_seconds", "INTEGER DEFAULT 0"},
+		{"hostname", "TEXT DEFAULT ''"},
+		{"filesystems", "TEXT DEFAULT '[]'"},
+		{"host_id", "TEXT DEFAULT ''"},
+		{"memory_cached", "INTEGER DEFAULT 0"},
+		{"memory_buffers", "INTEGER DEFAULT 0"},
 	}
 
 	for _, col := range newColumns {
@@ -118,7 +238,8 @@ func metricsColumnExists(db *sql.DB, columnName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	// Rows are fully consumed below; a close error adds nothing.
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var (
@@ -152,20 +273,34 @@ func (s *Store) Save(m *models.SystemState) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal processes: %w", err)
 	}
+	filesystems := m.Filesystems
+	if filesystems == nil {
+		filesystems = []models.Filesystem{}
+	}
+	filesystemsJSON, err := json.Marshal(filesystems)
+	if err != nil {
+		return fmt.Errorf("failed to marshal filesystems: %w", err)
+	}
 
 	query := `
 	INSERT INTO metrics (
 		timestamp, cpu_usage, cpu_per_core, memory_used, memory_total,
 		swap_used, swap_total, disk_read_bytes, disk_write_bytes, disk_iops,
 		net_sent_bytes, net_recv_bytes, load_avg_1, load_avg_5, load_avg_15,
-		temperature, top_processes, processes
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		temperature, top_processes, processes, uptime_seconds, hostname, filesystems, host_id,
+		memory_cached, memory_buffers
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err = s.db.Exec(query,
-		m.Timestamp, m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
+		// Normalized to UTC: go-sqlite3 would otherwise bind local wall time
+		// with an offset suffix, which sorts and compares incorrectly against
+		// SQLite's datetime('now') (UTC, no offset). That silently shifted the
+		// retention window by the host's UTC offset.
+		m.Timestamp.UTC(), m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
 		m.SwapUsed, m.SwapTotal, m.DiskReadBytes, m.DiskWriteBytes, m.DiskIOPS,
 		m.NetSentBytes, m.NetRecvBytes, m.LoadAvg1, m.LoadAvg5, m.LoadAvg15,
-		m.Temperature, m.TopProcesses, string(processesJSON),
+		m.Temperature, m.TopProcesses, string(processesJSON), m.UptimeSeconds, m.Hostname, string(filesystemsJSON), m.HostID,
+		m.MemoryCached, m.MemoryBuffers,
 	)
 	return err
 }
@@ -200,30 +335,35 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 		memory_used, memory_total, COALESCE(swap_used, 0), COALESCE(swap_total, 0),
 		disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
 		net_sent_bytes, net_recv_bytes, COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
-		temperature, top_processes, COALESCE(processes, '[]')
+		temperature, top_processes, COALESCE(processes, '[]'), COALESCE(uptime_seconds, 0), COALESCE(hostname, ''), COALESCE(filesystems, '[]'), COALESCE(host_id, ''),
+		COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0)
 		FROM metrics ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	// Rows are fully consumed below; a close error adds nothing.
+	defer func() { _ = rows.Close() }()
 
-	var results []models.SystemState
+	results := make([]models.SystemState, 0, limit)
 	for rows.Next() {
 		var m models.SystemState
 		var cpuPerCoreJSON string
 		var processesJSON string
+		var filesystemsJSON string
 		if err := rows.Scan(
 			&m.Timestamp, &m.CPUUsage, &cpuPerCoreJSON,
 			&m.MemoryUsed, &m.MemoryTotal, &m.SwapUsed, &m.SwapTotal,
 			&m.DiskReadBytes, &m.DiskWriteBytes, &m.DiskIOPS,
 			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
-			&m.Temperature, &m.TopProcesses, &processesJSON,
+			&m.Temperature, &m.TopProcesses, &processesJSON, &m.UptimeSeconds, &m.Hostname, &filesystemsJSON, &m.HostID,
+			&m.MemoryCached, &m.MemoryBuffers,
 		); err != nil {
 			return nil, err
 		}
 		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
 		m.Processes = decodeProcesses(processesJSON)
+		m.Filesystems = decodeFilesystems(filesystemsJSON)
 		results = append(results, m)
 	}
 	return results, nil
@@ -233,6 +373,14 @@ func decodeCPUPerCore(raw string) []float64 {
 	var values []float64
 	if err := json.Unmarshal([]byte(raw), &values); err != nil || values == nil {
 		return []float64{}
+	}
+	return values
+}
+
+func decodeFilesystems(raw string) []models.Filesystem {
+	var values []models.Filesystem
+	if err := json.Unmarshal([]byte(raw), &values); err != nil || values == nil {
+		return []models.Filesystem{}
 	}
 	return values
 }
@@ -260,9 +408,12 @@ func (s *Store) GetRecentInsights(limit int) ([]Insight, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	// Rows are fully consumed below; a close error adds nothing.
+	defer func() { _ = rows.Close() }()
 
-	var results []Insight
+	// Return an empty slice, not nil: nil marshals to JSON `null`, which forces
+	// every client to defensively null-check an endpoint that returns a list.
+	results := make([]Insight, 0, limit)
 	for rows.Next() {
 		var i Insight
 		if err := rows.Scan(&i.Timestamp, &i.Content); err != nil {
@@ -282,4 +433,175 @@ func (s *Store) Ping() error {
 		return fmt.Errorf("store is not initialized")
 	}
 	return s.db.Ping()
+}
+
+// AlertEvent is one persisted alert transition.
+type AlertEvent struct {
+	OccurredAt time.Time `json:"occurred_at"`
+	RuleID     string    `json:"rule_id"`
+	RuleName   string    `json:"rule_name"`
+	Metric     string    `json:"metric"`
+	State      string    `json:"state"`
+	Severity   string    `json:"severity"`
+	Value      float64   `json:"value"`
+	Threshold  float64   `json:"threshold"`
+	Hostname   string    `json:"hostname"`
+}
+
+// SaveAlertEvent records one alert transition. Only transitions are stored, so
+// a rule breached for an hour produces two rows (fired, resolved) rather than
+// one per poll.
+func (s *Store) SaveAlertEvent(event AlertEvent) error {
+	_, err := s.db.Exec(`
+		INSERT INTO alert_events (occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		event.OccurredAt.UTC(), event.RuleID, event.RuleName, event.Metric,
+		event.State, event.Severity, event.Value, event.Threshold, event.Hostname,
+	)
+	return err
+}
+
+// GetRecentAlertEvents returns the newest alert transitions first.
+func (s *Store) GetRecentAlertEvents(limit int) ([]AlertEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	rows, err := s.db.Query(`
+		SELECT occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname
+		FROM alert_events ORDER BY occurred_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	// Rows are fully consumed below; a close error adds nothing.
+	defer func() { _ = rows.Close() }()
+
+	events := make([]AlertEvent, 0, limit)
+	for rows.Next() {
+		var e AlertEvent
+		if err := rows.Scan(&e.OccurredAt, &e.RuleID, &e.RuleName, &e.Metric,
+			&e.State, &e.Severity, &e.Value, &e.Threshold, &e.Hostname); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
+}
+
+// PruneOldAlertEvents drops alert history beyond the retention window.
+func (s *Store) PruneOldAlertEvents(retentionHours int) error {
+	if retentionHours <= 0 {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`DELETE FROM alert_events WHERE occurred_at < ?`,
+		time.Now().UTC().Add(-time.Duration(retentionHours)*time.Hour),
+	)
+	return err
+}
+
+// Host is one machine in the fleet inventory.
+type Host struct {
+	HostID       string    `json:"host_id"`
+	Hostname     string    `json:"hostname"`
+	FirstSeen    time.Time `json:"first_seen"`
+	LastSeen     time.Time `json:"last_seen"`
+	AgentVersion string    `json:"agent_version"`
+}
+
+// UpsertHost records that a host reported, creating it on first contact.
+//
+// first_seen is preserved via COALESCE on conflict so a long-running host keeps
+// its original enrolment time.
+func (s *Store) UpsertHost(hostID, hostname, agentVersion string, seenAt time.Time) error {
+	if hostID == "" {
+		// Refuse to create an unattributable inventory row; a sample without a
+		// host id is still stored, it just does not register a host.
+		return nil
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO hosts (host_id, hostname, first_seen, last_seen, agent_version)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(host_id) DO UPDATE SET
+			hostname = excluded.hostname,
+			last_seen = excluded.last_seen,
+			agent_version = excluded.agent_version`,
+		hostID, hostname, seenAt.UTC(), seenAt.UTC(), agentVersion,
+	)
+	return err
+}
+
+// ListHosts returns the fleet inventory, most recently seen first.
+func (s *Store) ListHosts() ([]Host, error) {
+	rows, err := s.db.Query(`
+		SELECT host_id, hostname, first_seen, last_seen, agent_version
+		FROM hosts ORDER BY last_seen DESC`)
+	if err != nil {
+		return nil, err
+	}
+	// Rows are fully consumed below; a close error adds nothing.
+	defer func() { _ = rows.Close() }()
+
+	hosts := make([]Host, 0, 8)
+	for rows.Next() {
+		var h Host
+		if err := rows.Scan(&h.HostID, &h.Hostname, &h.FirstSeen, &h.LastSeen, &h.AgentVersion); err != nil {
+			return nil, err
+		}
+		hosts = append(hosts, h)
+	}
+	return hosts, rows.Err()
+}
+
+// GetRecentForHost returns recent samples for one host.
+//
+// An empty hostID means "any host", which keeps single-node deployments and
+// pre-multi-host databases working unchanged.
+func (s *Store) GetRecentForHost(hostID string, limit int) ([]models.SystemState, error) {
+	if hostID == "" {
+		return s.GetRecent(limit)
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `SELECT timestamp, cpu_usage, COALESCE(cpu_per_core, '[]'),
+		memory_used, memory_total, COALESCE(swap_used, 0), COALESCE(swap_total, 0),
+		disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
+		net_sent_bytes, net_recv_bytes, COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
+		temperature, top_processes, COALESCE(processes, '[]'), COALESCE(uptime_seconds, 0),
+		COALESCE(hostname, ''), COALESCE(filesystems, '[]'), COALESCE(host_id, ''),
+		COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0)
+		FROM metrics WHERE host_id = ? ORDER BY timestamp DESC LIMIT ?`
+
+	rows, err := s.db.Query(query, hostID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	results := make([]models.SystemState, 0, limit)
+	for rows.Next() {
+		var m models.SystemState
+		var cpuPerCoreJSON string
+		var processesJSON string
+		var filesystemsJSON string
+		if err := rows.Scan(
+			&m.Timestamp, &m.CPUUsage, &cpuPerCoreJSON,
+			&m.MemoryUsed, &m.MemoryTotal, &m.SwapUsed, &m.SwapTotal,
+			&m.DiskReadBytes, &m.DiskWriteBytes, &m.DiskIOPS,
+			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
+			&m.Temperature, &m.TopProcesses, &processesJSON, &m.UptimeSeconds,
+			&m.Hostname, &filesystemsJSON, &m.HostID,
+			&m.MemoryCached, &m.MemoryBuffers,
+		); err != nil {
+			return nil, err
+		}
+		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
+		m.Processes = decodeProcesses(processesJSON)
+		m.Filesystems = decodeFilesystems(filesystemsJSON)
+		results = append(results, m)
+	}
+	return results, rows.Err()
 }

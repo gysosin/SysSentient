@@ -1,0 +1,308 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  AIAnalysisResult,
+  FeedStatus,
+  FleetHost,
+  LogEntry,
+  Process,
+  SystemMetrics,
+} from '../types';
+import {
+  fetchActiveAlerts,
+  fetchHosts,
+  fetchLatestInsight,
+  fetchMetricsHistory,
+  fetchRecentLogs,
+  triggerAnalysis,
+} from '../services/api';
+import { useWebSocket } from './useWebSocket';
+import { LOG_REFRESH_RATE_MS, REFRESH_RATE_MS } from '../constants';
+
+// A feed is stale once it has missed several poll intervals. This is what makes
+// a half-open socket visible: the badge can read LIVE while no frame has
+// arrived for minutes, and the dashboard used to keep presenting the last value
+// as if it were current.
+const STALE_AFTER_MS = REFRESH_RATE_MS * 5;
+
+// Points retained for the charts. Matches the daemon's default page size so
+// a seeded history and the live stream line up.
+const MAX_HISTORY = 120;
+
+export const EMPTY_METRIC: SystemMetrics = {
+  hostname: '',
+  timestamp: 0,
+  cpuLoad: 0,
+  cpuPerCore: [],
+  memoryUsed: 0,
+  memoryTotal: 0,
+  memoryCached: 0,
+  memoryBuffers: 0,
+  swapUsed: 0,
+  swapTotal: 0,
+  diskRead: 0,
+  diskWrite: 0,
+  diskIOPS: 0,
+  networkRx: 0,
+  networkTx: 0,
+  loadAvg1: 0,
+  loadAvg5: 0,
+  loadAvg15: 0,
+  temperature: 0,
+  uptimeSeconds: 0,
+  filesystems: [],
+};
+
+interface DashboardData {
+  /** Fleet inventory. Empty in a single-node install. */
+  hosts: FleetHost[];
+  /** Count of firing alerts, surfaced as a badge in the navigation. */
+  firingAlerts: number;
+  /** Currently selected host id; empty means "all hosts". */
+  selectedHost: string;
+  selectHost: (hostID: string) => void;
+  metricsHistory: SystemMetrics[];
+  current: SystemMetrics;
+  hasData: boolean;
+  processes: Process[];
+  logs: LogEntry[];
+  feed: FeedStatus;
+  /** True while the stream is deliberately held still for inspection. */
+  frozen: boolean;
+  toggleFreeze: () => void;
+  ai: {
+    result: AIAnalysisResult | null;
+    loading: boolean;
+    error: string | null;
+    run: () => Promise<void>;
+  };
+}
+
+const DashboardContext = createContext<DashboardData | null>(null);
+
+export function useDashboard(): DashboardData {
+  const ctx = useContext(DashboardContext);
+  if (!ctx) {
+    throw new Error('useDashboard must be used inside <DashboardProvider>');
+  }
+  return ctx;
+}
+
+export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const {
+    connected,
+    metricsHistory: wsMetricsHistory,
+    processes: wsProcesses,
+  } = useWebSocket();
+
+  const [metricsHistory, setMetricsHistory] = useState<SystemMetrics[]>([]);
+  // Only the polling fallback writes this; the live socket supplies its own.
+  const [polledProcesses, setPolledProcesses] = useState<Process[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [hosts, setHosts] = useState<FleetHost[]>([]);
+  const [firingAlerts, setFiringAlerts] = useState(0);
+  const [selectedHost, setSelectedHost] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+
+  // Freeze holds a snapshot rather than pausing collection. Stopping the
+  // pollers would make the feed look stale, and "the operator asked me to hold
+  // still" must never be confused with "the machine stopped answering" — that
+  // distinction is the whole trust model of this console. Data keeps arriving
+  // underneath; only the view is pinned.
+  const [frozen, setFrozen] = useState<{
+    history: SystemMetrics[];
+    processes: Process[];
+    logs: LogEntry[];
+  } | null>(null);
+
+  const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Seed history once per host selection so charts have shape immediately.
+  // The socket's own buffer starts empty, so relying on it alone collapsed the
+  // charts to a single point on every page load.
+  useEffect(() => {
+    let cancelled = false;
+    const seed = async () => {
+      const { metrics } = await fetchMetricsHistory(selectedHost);
+      if (cancelled || metrics.length === 0) return;
+      setMetricsHistory((prev) => (prev.length >= metrics.length ? prev : metrics));
+    };
+    seed();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedHost]);
+
+  useEffect(() => {
+    if (!connected || wsMetricsHistory.length === 0) return;
+
+    // The socket streams the server's own view. When a specific host is
+    // selected, only its samples belong on screen.
+    const incoming = selectedHost
+      ? wsMetricsHistory.filter((m) => m.hostname === selectedHost || m.hostname === '')
+      : wsMetricsHistory;
+    if (incoming.length === 0) return;
+
+    // Append only frames newer than what we already hold, so the seeded
+    // history survives instead of being replaced by the socket's short buffer.
+    setMetricsHistory((prev) => {
+      if (prev.length === 0) return incoming;
+      const newestSeen = prev[prev.length - 1].timestamp;
+      const fresh = incoming.filter((m) => m.timestamp > newestSeen);
+      if (fresh.length === 0) return prev;
+      return [...prev, ...fresh].slice(-MAX_HISTORY);
+    });
+  }, [connected, wsMetricsHistory, selectedHost]);
+
+  // Fallback polling when the WebSocket is not connected.
+  useEffect(() => {
+    if (connected) return;
+    let cancelled = false;
+
+    const fetchData = async () => {
+      const { metrics, processes: procs } = await fetchMetricsHistory(selectedHost);
+      if (cancelled) return;
+      // Assigned unconditionally: guarding on `length > 0` left the last
+      // known-good numbers on screen through an outage, indistinguishable from
+      // a healthy idle system.
+      setMetricsHistory(metrics);
+      setPolledProcesses(procs);
+
+      const latestInsight = await fetchLatestInsight();
+      if (!cancelled && latestInsight) {
+        setAiResult((prev) => prev ?? latestInsight);
+      }
+    };
+
+    fetchData();
+    const intervalId = setInterval(fetchData, REFRESH_RATE_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [connected, selectedHost]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchLogs = async () => {
+      const recentLogs = await fetchRecentLogs();
+      if (cancelled) return;
+      setLogs(recentLogs);
+    };
+
+    fetchLogs();
+    const intervalId = setInterval(fetchLogs, LOG_REFRESH_RATE_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  // Firing-alert count for the nav badge. Cheap; polled on a slow cadence.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const alerts = await fetchActiveAlerts(selectedHost);
+      if (!cancelled) setFiringAlerts(alerts.filter((a) => a.state === 'firing').length);
+    };
+    load();
+    const id = setInterval(load, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [selectedHost]);
+
+  // Fleet inventory. Cheap and slow-moving, so polled well below metric rate.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const list = await fetchHosts();
+      if (!cancelled) setHosts(list);
+    };
+    load();
+    const id = setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  // A selected host that stops reporting must not strand the dashboard on an
+  // empty view forever.
+  useEffect(() => {
+    if (selectedHost && hosts.length > 0 && !hosts.some((h) => h.hostId === selectedHost)) {
+      setSelectedHost('');
+    }
+  }, [hosts, selectedHost]);
+
+  // Drives the "updated Ns ago" readout and staleness detection.
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const run = async () => {
+    setIsAiLoading(true);
+    setAiError(null);
+    try {
+      setAiResult(await triggerAnalysis());
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'AI analysis failed');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const liveProcesses = connected ? wsProcesses : polledProcesses;
+
+  const toggleFreeze = useCallback(() => {
+    setFrozen((prev) =>
+      prev ? null : { history: metricsHistory, processes: liveProcesses, logs },
+    );
+  }, [metricsHistory, liveProcesses, logs]);
+
+  const value = useMemo<DashboardData>(() => {
+    const shownHistory = frozen ? frozen.history : metricsHistory;
+    const hasData = shownHistory.length > 0;
+    const current = hasData ? shownHistory[shownHistory.length - 1] : EMPTY_METRIC;
+    // Age is measured against the live sample even while frozen, so the feed
+    // badge keeps telling the truth about the daemon rather than about the
+    // snapshot on screen.
+    const liveCurrent = metricsHistory.length > 0 ? metricsHistory[metricsHistory.length - 1] : null;
+    const ageMs = liveCurrent ? Math.max(0, now - liveCurrent.timestamp) : Infinity;
+    const ageSeconds = Math.round(ageMs / 1000);
+
+    let feed: FeedStatus;
+    if (!liveCurrent) {
+      feed = { level: 'down', label: 'NO DATA', detail: 'awaiting first sample', ageMs };
+    } else if (ageMs > STALE_AFTER_MS) {
+      feed = { level: 'stale', label: 'STALE', detail: `no update for ${ageSeconds}s`, ageMs };
+    } else if (connected) {
+      feed = { level: 'live', label: 'LIVE', detail: `updated ${ageSeconds}s ago`, ageMs };
+    } else {
+      feed = { level: 'polling', label: 'POLLING', detail: `updated ${ageSeconds}s ago`, ageMs };
+    }
+
+    return {
+      hosts,
+      firingAlerts,
+      selectedHost,
+      selectHost: setSelectedHost,
+      metricsHistory: shownHistory,
+      current,
+      hasData,
+      processes: frozen ? frozen.processes : liveProcesses,
+      logs: frozen ? frozen.logs : logs,
+      feed,
+      frozen: frozen !== null,
+      toggleFreeze,
+      ai: { result: aiResult, loading: isAiLoading, error: aiError, run },
+    };
+    // `run` is stable enough for this provider's lifetime; excluded deliberately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricsHistory, now, connected, liveProcesses, logs, aiResult, isAiLoading, aiError, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
+
+  return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
+};

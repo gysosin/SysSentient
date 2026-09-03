@@ -1,32 +1,20 @@
-export const APP_NAME = "SysSentient";
 export const REFRESH_RATE_MS = 2000; // 2 seconds
 export const LOG_REFRESH_RATE_MS = 10000; // 10 seconds
-export const HISTORY_LENGTH = 30; // 60 seconds of history on chart
 
 const viteEnv = import.meta.env ?? {};
 
-export const API_BASE_URL = viteEnv.VITE_SYS_SENTIENT_API_URL || 'http://localhost:8080/api';
-export const WS_BASE_URL = viteEnv.VITE_SYS_SENTIENT_WS_URL || 'ws://localhost:8080/ws/metrics';
-export const API_KEY = viteEnv.VITE_SYS_SENTIENT_API_KEY || '';
+// The dashboard is served by the daemon itself, so same-origin is the default:
+// the session cookie flows automatically, no host is hard-coded, and a reverse
+// proxy just works. The env overrides remain for split deployments.
+const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
 
-export const authHeaders = (): HeadersInit => {
-  if (!API_KEY) return {};
-  return { 'X-API-Key': API_KEY };
-};
+export const API_BASE_URL = viteEnv.VITE_SYS_SENTIENT_API_URL || `${origin}/api`;
+export const WS_BASE_URL =
+  viteEnv.VITE_SYS_SENTIENT_WS_URL || `${origin.replace(/^http/, 'ws')}/ws/metrics`;
 
-export const metricsWebSocketURL = (): string => {
-  if (!API_KEY) return WS_BASE_URL;
-
-  const url = new URL(WS_BASE_URL);
-  url.searchParams.set('api_key', API_KEY);
-  return url.toString();
-};
-
-// PII Scrubbing Patterns
-export const PII_PATTERNS = {
-  IPV4: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,
-  IPV6: /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])/g,
-  EMAIL: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-  // Simple heuristic for home directories to mask usernames
-  HOME_DIR: /\/home\/([a-zA-Z0-9_-]+)\//g
-};
+/**
+ * No credentials in the URL. The previous build appended the API key as
+ * `?api_key=`, which put it in every proxy and browser-history log; the
+ * browser now attaches the session cookie itself on a same-origin upgrade.
+ */
+export const metricsWebSocketURL = (): string => WS_BASE_URL;
