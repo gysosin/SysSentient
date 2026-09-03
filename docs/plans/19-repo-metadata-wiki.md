@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 5 — Docs |
 | **Depends on** | 16, 18 |
-| **Status** | not started |
+| **Status** | **partly done** — README, templates, CoC; repo settings and wiki are manual |
 
 ## Why
 

@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 5 — Docs |
 | **Depends on** | 16, 17 |
-| **Status** | not started |
+| **Status** | **done** — deploys behind a verification gate |
 
 ## Why
 

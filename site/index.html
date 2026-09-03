@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SysSentient — self-hosted server monitoring with AI diagnosis</title>
+<meta name="description" content="Self-hosted server monitoring: live metrics every two seconds, alerting that suppresses transient spikes, and AI-assisted diagnosis. Apache-2.0, single static binary, no telemetry.">
+<link rel="canonical" href="https://gysosin.github.io/SysSentient/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SysSentient — self-hosted server monitoring with AI diagnosis">
+<meta property="og:description" content="Live metrics, alerting with duration thresholds, and AI-assisted diagnosis. One static binary, Apache-2.0, no telemetry.">
+<meta property="og:url" content="https://gysosin.github.io/SysSentient/">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    --bg: oklch(0.11 0.015 260);
+    --fg: oklch(0.93 0.012 250);
+    --panel: oklch(0.15 0.018 260);
+    --panel-strong: oklch(0.19 0.022 260);
+    --line: oklch(0.26 0.025 260);
+    --mute: oklch(0.65 0.025 250);
+    --brand: oklch(0.72 0.16 35);
+    --accent: oklch(0.8 0.14 85);
+    --ok: oklch(0.76 0.16 155);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: oklch(0.97 0.01 250); --fg: oklch(0.2 0.025 260);
+      --panel: oklch(1 0 0); --panel-strong: oklch(0.94 0.015 250);
+      --line: oklch(0.86 0.02 250); --mute: oklch(0.45 0.03 250);
+      --brand: oklch(0.58 0.18 35); --accent: oklch(0.65 0.14 85);
+      --ok: oklch(0.55 0.16 155);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--brand); }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 0 1.5rem; }
+  header { border-bottom: 1px solid var(--line); }
+  .bar { display: flex; align-items: center; gap: .75rem; padding: 1rem 0; flex-wrap: wrap; }
+  .mark {
+    display: grid; place-items: center; width: 2.25rem; height: 2.25rem;
+    border: 1px solid color-mix(in oklab, var(--brand) 40%, transparent);
+    background: color-mix(in oklab, var(--brand) 14%, transparent);
+    color: var(--brand); border-radius: .375rem; font-weight: 700; letter-spacing: .02em;
+  }
+  .name { font-weight: 600; letter-spacing: .18em; text-transform: uppercase; font-size: .95rem; }
+  .bar nav { margin-left: auto; display: flex; gap: 1.25rem; font-size: .9rem; }
+  h1 {
+    font-size: clamp(2.25rem, 7vw, 4.5rem); line-height: .95; margin: 3rem 0 0;
+    text-transform: uppercase; letter-spacing: -.02em; font-weight: 800;
+  }
+  h1 .hl { color: var(--brand); }
+  .lede { font-size: 1.15rem; color: var(--mute); max-width: 44rem; margin: 1.5rem 0 2rem; }
+  .cta { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 3.5rem; }
+  .btn {
+    display: inline-block; padding: .7rem 1.1rem; border-radius: .375rem;
+    font-weight: 600; font-size: .9rem; text-decoration: none;
+  }
+  .btn-primary { background: var(--brand); color: var(--bg); }
+  .btn-ghost { border: 1px solid var(--line); background: var(--panel-strong); color: var(--fg); }
+  .eyebrow {
+    font-size: .7rem; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--mute); font-weight: 600; margin: 3.5rem 0 .5rem;
+  }
+  h2 { font-size: 1.75rem; text-transform: uppercase; letter-spacing: .02em; margin: 0 0 1.5rem; }
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+  .card { border: 1px solid var(--line); background: var(--panel); border-radius: .75rem; padding: 1.25rem; }
+  .card h3 { margin: 0 0 .5rem; font-size: 1rem; }
+  .card p { margin: 0; color: var(--mute); font-size: .92rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--line); }
+  th { color: var(--mute); font-size: .72rem; letter-spacing: .15em; text-transform: uppercase; font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .good { color: var(--ok); font-weight: 600; }
+  pre {
+    background: var(--panel); border: 1px solid var(--line); border-radius: .5rem;
+    padding: 1rem; overflow-x: auto; font-size: .85rem;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  footer {
+    border-top: 1px solid var(--line); margin-top: 4rem; padding: 2rem 0;
+    color: var(--mute); font-size: .85rem;
+    display: flex; gap: 1.25rem; flex-wrap: wrap;
+  }
+  .note {
+    border-left: 2px solid var(--accent); padding-left: 1rem; color: var(--mute);
+    margin: 1.5rem 0; font-size: .92rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <span class="mark">SS</span>
+    <span class="name">SysSentient</span>
+    <nav>
+      <a href="https://github.com/gysosin/SysSentient">GitHub</a>
+      <a href="https://github.com/gysosin/SysSentient/blob/main/docs/README.md">Docs</a>
+      <a href="https://github.com/gysosin/SysSentient/releases">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>One console for<br><span class="hl">every signal.</span></h1>
+
+  <p class="lede">
+    Self-hosted server monitoring. Live metrics every two seconds, alerting that
+    ignores transient spikes, and an AI that explains what went wrong — with the
+    evidence it used and the data it redacted first.
+  </p>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/gysosin/SysSentient/releases">Download</a>
+    <a class="btn btn-ghost" href="https://github.com/gysosin/SysSentient/blob/main/docs/INSTALL.md">Install guide</a>
+    <a class="btn btn-ghost" href="https://github.com/gysosin/SysSentient">Source</a>
+  </div>
+
+  <p class="eyebrow">What it does</p>
+  <h2>Monitoring that stays honest</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Live, and truthful about it</h3>
+      <p>A two-second stream, and a feed indicator that distinguishes live, polling, stale and no-data. The worst thing a monitor can do is show confident numbers that stopped being true ten minutes ago.</p>
+    </div>
+    <div class="card">
+      <h3>Alerts with a duration</h3>
+      <p>A rule must hold for a set time before it fires, so a build spike does not page anyone. Pending, firing and resolved are distinct states with a recorded history.</p>
+    </div>
+    <div class="card">
+      <h3>AI that shows its work</h3>
+      <p>Gemini explains the current state and suggests commands. Every suggestion is labelled as the model's claim, never executed automatically, and the payload is redacted before it leaves.</p>
+    </div>
+    <div class="card">
+      <h3>Drill down to the cause</h3>
+      <p>A tile says 90%. Clicking it shows per-core distribution, the ranked processes responsible, and inode pressure beside capacity — the things you actually need at 3am.</p>
+    </div>
+    <div class="card">
+      <h3>A year of history</h3>
+      <p>Full resolution for a day, per-minute for a month, per-five-minute for a year. Tiered, because keeping raw samples for a year would be tens of gigabytes per host.</p>
+    </div>
+    <div class="card">
+      <h3>Yours, entirely</h3>
+      <p>One static binary with the dashboard embedded. No telemetry, no phone-home, no CDN — it runs on air-gapped networks. Apache-2.0.</p>
+    </div>
+  </div>
+
+  <p class="eyebrow">Measured, not claimed</p>
+  <h2>What it costs your machine</h2>
+  <table>
+    <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Idle CPU</td><td class="num good">0.78%</td><td>of one core, 8-core host at a 2s interval</td></tr>
+      <tr><td>Resident memory</td><td class="num">26 MB</td><td></td></tr>
+      <tr><td>Collection</td><td class="num">20 ms</td><td>per sample, 594 processes</td></tr>
+      <tr><td>Binary</td><td class="num">31 MB</td><td>static, dashboard included</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Every figure here is reproducible — the procedure is in
+    <a href="https://github.com/gysosin/SysSentient/blob/main/docs/PERFORMANCE.md">docs/PERFORMANCE.md</a>,
+    including the two measurement traps that produced wrong answers while it was being written.
+  </p>
+
+  <p class="eyebrow">Getting started</p>
+  <h2>Install</h2>
+  <pre><code># Debian / Ubuntu
+sudo dpkg -i sys-sentient_&lt;version&gt;_linux_amd64.deb
+
+# Fedora / RHEL
+sudo rpm -i sys-sentient_&lt;version&gt;_linux_amd64.rpm
+
+sudo systemctl enable --now sys-sentient
+sudo journalctl -u sys-sentient | grep -i "setup token"</code></pre>
+  <p class="lede" style="font-size:.95rem">
+    Then open <code>http://localhost:8080</code> and create the first administrator.
+    There is no default password at any point. Builds exist for linux, windows and
+    darwin on amd64 and arm64.
+  </p>
+</main>
+
+<footer class="wrap">
+  <span>Apache-2.0</span>
+  <a href="https://github.com/gysosin/SysSentient">GitHub</a>
+  <a href="https://github.com/gysosin/SysSentient/blob/main/docs/README.md">Documentation</a>
+  <a href="https://github.com/gysosin/SysSentient/blob/main/SECURITY.md">Security</a>
+  <a href="https://github.com/gysosin/SysSentient/blob/main/docs/PRIVACY.md">Privacy</a>
+</footer>
+
+</body>
+</html>

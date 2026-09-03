@@ -14,6 +14,15 @@ everything below is the initial published state rather than a delta.
 
 ### Added
 
+- **Documentation, a website, and the repository metadata a project needs to be
+  usable by anyone else.** `docs/` now covers install, configuration,
+  architecture, deployment, performance, privacy, development and releasing,
+  each topic with exactly one home — configuration had previously been
+  documented in three places and build commands in five. A static site deploys
+  to GitHub Pages behind a link-and-metadata check, so a broken landing page
+  fails the build rather than going unnoticed. Plus a code of conduct, issue
+  and pull-request templates, and a rewritten README.
+
 - **Poll interval, retention and log level are editable from Settings and take
   effect immediately.** Previously every setting was read once at boot, so
   changing how often the machine is sampled meant editing a file and restarting
