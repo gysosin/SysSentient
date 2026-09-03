@@ -14,6 +14,13 @@ everything below is the initial published state rather than a delta.
 
 ### Added
 
+- **Every Overview tile opens a drill-down.** A tile says the machine is at 90%;
+  the drill-down says of what and where — per-core distribution and the ranked
+  processes responsible for CPU, memory holders and swap pressure for memory,
+  per-filesystem capacity with inode usage for disk, and history for each. The
+  tiles are buttons, so they are reachable from the keyboard, and Escape closes
+  the view.
+
 - **Cross-platform packages.** A release now produces static binaries for
   linux, windows and darwin on amd64 and arm64, plus `.deb`, `.rpm` and `.apk`
   with a service account, systemd unit and a `noreplace` config, and a
