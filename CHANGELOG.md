@@ -14,6 +14,14 @@ everything below is the initial published state rather than a delta.
 
 ### Added
 
+- **Tiered retention, so history is kept rather than deleted.** Metrics were
+  hard-`DELETE`d after 24 hours, so "was this machine slow last Tuesday" had no
+  answer. Full-resolution samples are now rolled up into per-minute averages
+  kept for 30 days and per-five-minute averages kept for a year; data only
+  leaves the system at the end of the last tier. Measured: an hour of raw
+  samples is 3,808 KB and 88 KB once rolled up — 2.3%. Both tiers are
+  configurable.
+
 - **Every Overview tile opens a drill-down.** A tile says the machine is at 90%;
   the drill-down says of what and where — per-core distribution and the ranked
   processes responsible for CPU, memory holders and swap pressure for memory,
@@ -81,6 +89,15 @@ everything below is the initial published state rather than a delta.
   Dependabot configuration.
 
 ### Changed
+
+- **SQLite concurrency and disk reclamation.** The connection pool was capped
+  at one, which enabled WAL and then forfeited the concurrent reads that are
+  its only benefit — every dashboard read serialised behind every write. Agent
+  ingest wrote one autocommit transaction per sample, so a 60-sample flush was
+  60 fsyncs contending for a single write lock; batched, it is 2.1× faster. The
+  WAL is now checkpointed on every maintenance tick (it had been measured
+  larger than the database itself) and the file is vacuumed daily, so deleted
+  pages return to the filesystem instead of only to SQLite's freelist.
 
 - **Idle CPU cut from 4.10% of a core to 0.78%**, and garbage per collection
   from 14.8 MB to 0.78 MB. Two causes: a 500 ms sleep held the main loop for a

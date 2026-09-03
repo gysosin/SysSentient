@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 2 — Performance |
 | **Depends on** | 01 |
-| **Status** | not started |
+| **Status** | **partly done** — concurrency, batching, checkpoint and vacuum; per-row payload still open |
 
 ## Why
 

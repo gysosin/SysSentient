@@ -47,8 +47,18 @@ func NewStore(dbPath string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// WAL allows one writer and many concurrent readers. Capping the pool at
+	// one connection enabled WAL and then forfeited it: every dashboard read
+	// serialised behind every write, which is the first thing that falls over
+	// with several agents pushing.
+	//
+	// SQLite still permits only one writer, so concurrent writes serialise on
+	// the busy timeout in the DSN rather than failing.
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(4)
+	// Bounded so a long-lived process does not hold file descriptors for
+	// connections it stopped using hours ago.
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	if err := createTable(db); err != nil {
 		_ = db.Close()
@@ -57,6 +67,11 @@ func NewStore(dbPath string) (*Store, error) {
 
 	// Run migrations for new columns
 	if err := migrateSchema(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	if err := createRollupTable(db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -311,7 +326,18 @@ func metricsColumnExists(db *sql.DB, columnName string) (bool, error) {
 	return false, rows.Err()
 }
 
+// execer is satisfied by both *sql.DB and *sql.Tx, so one insert body serves
+// the single-sample and batched paths and they cannot drift apart.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+// Save stores one sample.
 func (s *Store) Save(m *models.SystemState) error {
+	return saveTx(s.db, m)
+}
+
+func saveTx(db execer, m *models.SystemState) error {
 	cpuPerCoreJSON, err := json.Marshal(m.CPUPerCore)
 	if err != nil {
 		return fmt.Errorf("failed to marshal cpu_per_core: %w", err)
@@ -342,11 +368,10 @@ func (s *Store) Save(m *models.SystemState) error {
 		memory_cached, memory_buffers
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err = s.db.Exec(query,
-		// Normalized to UTC: go-sqlite3 would otherwise bind local wall time
-		// with an offset suffix, which sorts and compares incorrectly against
-		// SQLite's datetime('now') (UTC, no offset). That silently shifted the
-		// retention window by the host's UTC offset.
+	_, err = db.Exec(query,
+		// Stored through one explicit layout. Binding a raw time.Time lets the
+		// driver choose, and modernc.org/sqlite writes Go's String() form,
+		// which SQLite's own date functions cannot parse.
 		sqlTime(m.Timestamp), m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
 		m.SwapUsed, m.SwapTotal, m.DiskReadBytes, m.DiskWriteBytes, m.DiskIOPS,
 		m.NetSentBytes, m.NetRecvBytes, m.LoadAvg1, m.LoadAvg5, m.LoadAvg15,
@@ -655,4 +680,41 @@ func (s *Store) GetRecentForHost(hostID string, limit int) ([]models.SystemState
 		results = append(results, m)
 	}
 	return results, rows.Err()
+}
+
+// SaveBatch stores many samples in one transaction.
+//
+// The ingest handler previously called Save once per sample, so a batch of 60
+// from one agent was 60 separate autocommit transactions — 60 fsyncs, each
+// contending for the single write lock. With several agents pushing
+// concurrently that is the first thing to fall over.
+//
+// Returns the number stored. A sample that fails is skipped rather than
+// aborting the batch: one malformed row from one agent must not discard the
+// other fifty-nine, and the caller counts rejections either way.
+func (s *Store) SaveBatch(samples []*models.SystemState) (int, error) {
+	if len(samples) == 0 {
+		return 0, nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin batch: %w", err)
+	}
+	// Rollback is a no-op once Commit succeeds, so this is safe unconditionally
+	// and covers every early return.
+	defer func() { _ = tx.Rollback() }()
+
+	stored := 0
+	for _, m := range samples {
+		if err := saveTx(tx, m); err != nil {
+			continue
+		}
+		stored++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit batch: %w", err)
+	}
+	return stored, nil
 }

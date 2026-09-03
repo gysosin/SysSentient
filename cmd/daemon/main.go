@@ -147,6 +147,10 @@ func main() {
 
 	// last_seen only needs to be fresh enough to answer "is this host
 	// reporting", not accurate to the individual sample.
+	// The maintenance tick fires hourly, so 24 ticks is a daily VACUUM.
+	const vacuumEveryNTicks = 24
+	maintenanceTicks := 0
+
 	const hostUpsertInterval = 30 * time.Second
 	var lastHostUpsert time.Time
 
@@ -168,8 +172,18 @@ func main() {
 			return
 
 		case <-dbTicker.C:
-			if err := store.PruneOldMetrics(cfg.Database.MetricsRetentionHours); err != nil {
-				logger.Error("error pruning old metrics", "error", err)
+			// Roll up before pruning, never after: PruneTiers deletes the raw
+			// samples the rollup reads, so reversing these two loses the
+			// history permanently rather than aggregating it.
+			policy := storage.RetentionPolicy{
+				RawHours:       cfg.Database.MetricsRetentionHours,
+				MinuteDays:     cfg.Database.MinuteRollupDays,
+				FiveMinuteDays: cfg.Database.FiveMinuteRollupDays,
+			}
+			if err := store.Rollup(policy, time.Now()); err != nil {
+				logger.Error("error rolling up metrics", "error", err)
+			} else if err := store.PruneTiers(policy, time.Now()); err != nil {
+				logger.Error("error pruning metric tiers", "error", err)
 			}
 			if err := store.PruneOldInsights(cfg.Database.InsightsRetentionHours); err != nil {
 				logger.Error("error pruning old insights", "error", err)
@@ -179,6 +193,16 @@ func main() {
 			}
 			if _, err := store.PruneExpiredSessions(time.Now()); err != nil {
 				logger.Error("error pruning expired sessions", "error", err)
+			}
+
+			// Reclaim what the deletes above freed. VACUUM takes an exclusive
+			// lock and rewrites the file, so it runs daily rather than on
+			// every maintenance tick; the checkpoint is cheap and runs each
+			// time, because under continuous writes the WAL otherwise grows
+			// past the database it belongs to.
+			maintenanceTicks++
+			if err := store.Compact(maintenanceTicks%vacuumEveryNTicks == 0); err != nil {
+				logger.Warn("error compacting database", "error", err)
 			}
 
 		case <-ticker.C:

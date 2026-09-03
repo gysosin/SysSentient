@@ -186,10 +186,53 @@ func validBaseConfig() *Config {
 	cfg.Database.Path = "test.db"
 	cfg.Database.MetricsRetentionHours = 24
 	cfg.Database.InsightsRetentionHours = 168
+	cfg.Database.MinuteRollupDays = 30
+	cfg.Database.FiveMinuteRollupDays = 365
 	cfg.Mode = ModeAllInOne
 	cfg.Logging.Level = "info"
 	cfg.Logging.Format = "text"
 	return cfg
+}
+
+func TestRollupRetentionValidation(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{
+			name:    "minute tier must be at least a day",
+			mutate:  func(c *Config) { c.Database.MinuteRollupDays = 0 },
+			wantErr: "minute rollup retention",
+		},
+		{
+			// Deleting the coarse tier before the fine one it was derived from
+			// is backwards, and would silently shorten total history.
+			name:    "five-minute tier cannot be shorter than the minute tier",
+			mutate:  func(c *Config) { c.Database.FiveMinuteRollupDays = 7; c.Database.MinuteRollupDays = 30 },
+			wantErr: "must be at least the minute retention",
+		},
+		{
+			name:   "equal tiers are allowed",
+			mutate: func(c *Config) { c.Database.FiveMinuteRollupDays = 30; c.Database.MinuteRollupDays = 30 },
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := validBaseConfig()
+			tt.mutate(c)
+			err := c.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() = %v, want error containing %q", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestLoggingDefaultsAndValidation(t *testing.T) {

@@ -68,6 +68,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var accepted, rejected int
+	batch := make([]*models.SystemState, 0, len(req.Samples))
 	seenHosts := make(map[string]models.SystemState, 1)
 
 	for _, sample := range req.Samples {
@@ -84,14 +85,22 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if err := s.store.Save(&sample); err != nil {
-			slog.Error("failed to store ingested sample", "host_id", sample.HostID, "error", err)
-			rejected++
-			continue
-		}
-		accepted++
+		batch = append(batch, &sample)
 		seenHosts[sample.HostID] = sample
 	}
+
+	// One transaction for the whole batch. Sixty samples used to be sixty
+	// autocommit transactions — sixty fsyncs, each contending for SQLite's
+	// single write lock — which is the first thing to fall over once several
+	// agents push concurrently.
+	stored, err := s.store.SaveBatch(batch)
+	if err != nil {
+		slog.Error("failed to store ingested batch", "samples", len(batch), "error", err)
+		http.Error(w, "failed to store samples", http.StatusInternalServerError)
+		return
+	}
+	accepted += stored
+	rejected += len(batch) - stored
 
 	// Register the hosts and evaluate alerts against their newest sample only:
 	// a backlog replayed after a network partition must not fire an alert for
