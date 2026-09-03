@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 4 — Console |
 | **Depends on** | 00 |
-| **Status** | not started |
+| **Status** | **done** — tabbed, URL-addressable sections |
 
 ## Why
 

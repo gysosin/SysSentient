@@ -75,6 +75,13 @@ everything below is the initial published state rather than a delta.
 
 ### Changed
 
+- **Settings is organised into sections** — Status, Configuration, Privacy &
+  integrations, Users, Account — instead of six panels stacked in one grid,
+  which put the change-password form beside the API endpoint reference. Each
+  section is addressable by URL, so the existing `/settings#account` link from
+  the account menu keeps working, and viewers no longer see a Users tab at all
+  rather than seeing one that does nothing.
+
 - **Readable type and a full-width layout.** 72 hardcoded font sizes between
   9px and 13px are replaced by a named scale with a 12px floor; log timestamps
   in particular were unreadable. The shell no longer caps at 1600px, which left
