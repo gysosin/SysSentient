@@ -19,6 +19,25 @@ import (
 // from drifting apart in tests, which is exactly how the swap first broke.
 const driverName = "sqlite"
 
+// sqlTimeLayout is the textual form every timestamp is stored in.
+//
+// Timestamps must never be bound as a raw time.Time. database/sql leaves the
+// encoding to the driver, and modernc.org/sqlite writes Go's String() form —
+// "2026-09-03 17:52:20.885864934 +0000 UTC" — which SQLite's own date
+// functions cannot parse. That silently breaks anything calling datetime() on
+// the column, and it is not hypothetical: the timestamp-normalisation
+// migration NULLed 158 rows of a nullable column and crashed the daemon
+// outright on a NOT NULL one.
+//
+// Millisecond precision, because SQLite's datetime() accepts at most three
+// fractional digits and samples are two seconds apart.
+const sqlTimeLayout = "2006-01-02 15:04:05.999"
+
+// sqlTime renders a timestamp in the one form the database stores.
+func sqlTime(t time.Time) string {
+	return t.UTC().Format(sqlTimeLayout)
+}
+
 type Store struct {
 	db *sql.DB
 }
@@ -196,10 +215,26 @@ func normalizeStoredTimestamps(db *sql.DB) error {
 		// SQL identifiers cannot be bound as parameters. Both values come from
 		// the hardcoded list above — never from config, a request or the
 		// database — so there is no injection surface here.
+		// COALESCE is load-bearing: datetime() returns NULL for anything it
+		// cannot parse, and writing that back either destroys the value (on a
+		// nullable column) or aborts the migration and stops the daemon
+		// booting (on a NOT NULL one). Both happened. An unparseable value is
+		// now left exactly as it was.
+		//
+		// The trailing rtrim handles Go's time.String() form,
+		// "2026-09-03 17:52:20.885864934 +0000 UTC", which earlier builds
+		// stored: strip the zone suffix and the sub-second digits SQLite will
+		// not accept, then let datetime() parse what remains.
 		query := fmt.Sprintf( // #nosec G201 -- identifiers from the fixed list above
-			`UPDATE %s SET %s = datetime(%s)
-			 WHERE %s LIKE '%%+%%' OR %s LIKE '%%Z' OR %s LIKE '%%_-__:__'`,
-			stmt.table, stmt.column, stmt.column, stmt.column, stmt.column, stmt.column,
+			`UPDATE %s
+			    SET %s = COALESCE(
+			              datetime(%s),
+			              datetime(substr(%s, 1, 19)),
+			              %s)
+			  WHERE %s LIKE '%%+%%' OR %s LIKE '%%Z' OR %s LIKE '%%_-__:__' OR %s LIKE '%% UTC'`,
+			stmt.table,
+			stmt.column, stmt.column, stmt.column, stmt.column,
+			stmt.column, stmt.column, stmt.column, stmt.column,
 		)
 		if _, err := db.Exec(query); err != nil {
 			return fmt.Errorf("failed to normalize %s.%s: %w", stmt.table, stmt.column, err)
@@ -312,7 +347,7 @@ func (s *Store) Save(m *models.SystemState) error {
 		// with an offset suffix, which sorts and compares incorrectly against
 		// SQLite's datetime('now') (UTC, no offset). That silently shifted the
 		// retention window by the host's UTC offset.
-		m.Timestamp.UTC(), m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
+		sqlTime(m.Timestamp), m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
 		m.SwapUsed, m.SwapTotal, m.DiskReadBytes, m.DiskWriteBytes, m.DiskIOPS,
 		m.NetSentBytes, m.NetRecvBytes, m.LoadAvg1, m.LoadAvg5, m.LoadAvg15,
 		m.Temperature, m.TopProcesses, string(processesJSON), m.UptimeSeconds, m.Hostname, string(filesystemsJSON), m.HostID,
@@ -471,7 +506,7 @@ func (s *Store) SaveAlertEvent(event AlertEvent) error {
 	_, err := s.db.Exec(`
 		INSERT INTO alert_events (occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		event.OccurredAt.UTC(), event.RuleID, event.RuleName, event.Metric,
+		sqlTime(event.OccurredAt), event.RuleID, event.RuleName, event.Metric,
 		event.State, event.Severity, event.Value, event.Threshold, event.Hostname,
 	)
 	return err
@@ -511,7 +546,7 @@ func (s *Store) PruneOldAlertEvents(retentionHours int) error {
 	}
 	_, err := s.db.Exec(
 		`DELETE FROM alert_events WHERE occurred_at < ?`,
-		time.Now().UTC().Add(-time.Duration(retentionHours)*time.Hour),
+		sqlTime(time.Now().Add(-time.Duration(retentionHours)*time.Hour)),
 	)
 	return err
 }
@@ -543,7 +578,7 @@ func (s *Store) UpsertHost(hostID, hostname, agentVersion string, seenAt time.Ti
 			hostname = excluded.hostname,
 			last_seen = excluded.last_seen,
 			agent_version = excluded.agent_version`,
-		hostID, hostname, seenAt.UTC(), seenAt.UTC(), agentVersion,
+		hostID, hostname, sqlTime(seenAt), sqlTime(seenAt), agentVersion,
 	)
 	return err
 }

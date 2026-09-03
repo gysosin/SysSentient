@@ -118,6 +118,17 @@ everything below is the initial published state rather than a delta.
 
 ### Fixed
 
+- **Timestamps were stored in a format SQLite could not read, and the migration
+  that tried to normalise them destroyed data.** `database/sql` leaves
+  parameter encoding to the driver, and `modernc.org/sqlite` writes a
+  `time.Time` as Go's `String()` form — `2026-09-03 17:20:12.19135217 +0000
+  UTC` — which `datetime()` cannot parse. The normalisation migration then
+  wrote that `NULL` back: on the nullable `metrics.timestamp` it silently
+  destroyed 158 rows, and on the `NOT NULL` `alert_events.occurred_at` it
+  aborted start-up entirely, so the daemon refused to boot. Timestamps are now
+  written through one explicit layout, and the migration leaves anything it
+  cannot parse untouched instead of nulling it.
+
 - A `<div>` nested inside a `<p>` in the Overview stat cards, which React
   reported as a hydration-breaking HTML nesting error whenever a card was in
   its loading state.

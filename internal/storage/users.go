@@ -72,7 +72,7 @@ func (s *Store) CreateUser(u UserRecord) error {
 	_, err := s.db.Exec(`
 		INSERT INTO users (id, email, password_hash, role, created_at, last_login_at)
 		VALUES (?, ?, ?, ?, ?, NULL)`,
-		u.ID, u.Email, u.PasswordHash, u.Role, u.CreatedAt.UTC())
+		u.ID, u.Email, u.PasswordHash, u.Role, sqlTime(u.CreatedAt))
 	if isUniqueViolation(err) {
 		return ErrDuplicateEmail
 	}
@@ -157,6 +157,6 @@ func (s *Store) UpdatePasswordHash(id, hash string) error {
 }
 
 func (s *Store) TouchLastLogin(id string, at time.Time) error {
-	_, err := s.db.Exec(`UPDATE users SET last_login_at = ? WHERE id = ?`, at.UTC(), id)
+	_, err := s.db.Exec(`UPDATE users SET last_login_at = ? WHERE id = ?`, sqlTime(at), id)
 	return err
 }
