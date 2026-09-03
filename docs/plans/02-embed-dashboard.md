@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 1 — Packaging |
 | **Depends on** | 01 |
-| **Status** | not started |
+| **Status** | **done** — binary serves the UI from any cwd |
 
 ## Why
 

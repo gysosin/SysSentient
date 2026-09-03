@@ -1,0 +1,5 @@
+Keeps web/dist present so `//go:embed all:dist` in web/embed.go compiles
+on a clean checkout, before the dashboard has ever been built.
+
+Recreated by scripts/keep-dist.mjs after every build, because Vite empties
+this directory. The built assets themselves stay untracked.

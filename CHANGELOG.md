@@ -47,6 +47,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The dashboard is embedded in the binary** (`web/embed.go`). The server
+  previously read it from `./web/dist` relative to the working directory, which
+  is why the systemd unit had to pin `WorkingDirectory` — and why no `.deb`,
+  `.rpm` or `.msi` could ship it. `sys-daemon` now serves the UI from any
+  directory. A disk copy at `./web/dist`, when present, still wins so that
+  `npm run build` is picked up without recompiling the daemon.
+
 - Frontend toolchain raised: **Vite 6 → 8** (rolldown), **Vitest 3 → 5**,
   **recharts 2 → 3**, React 19.2.3 → 19.2.8. Build time dropped from ~8s to
   ~0.8s. Two breaking changes needed fixing: rolldown's `manualChunks` only

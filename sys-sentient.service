@@ -7,7 +7,6 @@ Type=simple
 User=sys-sentient
 Group=sys-sentient
 SupplementaryGroups=systemd-journal
-WorkingDirectory=/opt/sys-sentient
 ExecStart=/opt/sys-sentient/sys-daemon
 Restart=always
 # Environment variables can be set here or in /etc/sys-sentient/config.yaml
