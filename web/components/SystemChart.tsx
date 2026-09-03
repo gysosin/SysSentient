@@ -50,6 +50,12 @@ const formatTick = (value: number): string => {
   return value.toFixed(1);
 };
 
+/** Narrows recharts' loose value/label types to a finite number. */
+function asNumber(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 const formatClock = (ms: number): string => {
   if (!Number.isFinite(ms) || ms <= 0) return '';
   const d = new Date(ms);
@@ -118,8 +124,13 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
             }}
             itemStyle={{ color }}
             labelStyle={{ color: 'var(--muted-foreground)' }}
-            labelFormatter={(value: number) => formatClock(value)}
-            formatter={(value: number) => [`${value.toFixed(1)}${unit}`, title]}
+            // recharts 3 widened both formatter signatures: a label is a
+            // ReactNode and a value is `string | number | Array`, either of
+            // which may be undefined. Coerce rather than assert — a tooltip
+            // that throws on a null sample would take the whole chart down
+            // with it, and null samples are exactly what a stale feed emits.
+            labelFormatter={(label) => formatClock(asNumber(label))}
+            formatter={(value) => [`${asNumber(value).toFixed(1)}${unit}`, title] as [string, string]}
             cursor={{ stroke: 'var(--muted-foreground)', strokeWidth: 1, strokeDasharray: '4 4' }}
           />
           <Area
