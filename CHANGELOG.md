@@ -9,6 +9,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Apache-2.0 licence**, with `NOTICE` and `docs/THIRD_PARTY.md`. The project
+  was previously "all rights reserved" by default, which meant nobody could
+  legally redistribute or run it — a hard blocker on shipping packages at all.
+  The bundled typefaces are SIL OFL-1.1 and ship as binaries inside the daemon,
+  so that notice is carried explicitly.
+
 - **Windows and macOS support for log collection and machine identity.** Log
   sources are now a per-platform list: journalctl/dmesg/syslog on Linux, the
   System and Application event logs via `wevtutil` on Windows, and the unified
@@ -159,7 +165,5 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Single-host only. There is no host dimension in the ingest path.
 - No TLS; run behind a reverse proxy.
 - Alert rules are built in and not yet editable from the browser.
-- **No LICENSE file yet** — the project is "all rights reserved" by default
-  until one is chosen.
 
 [Unreleased]: https://github.com/gysosin/SysSentient/commits/main

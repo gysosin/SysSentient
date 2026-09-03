@@ -12,9 +12,9 @@ AI-assisted analysis via Google Gemini.
 - **Integrations** — Prometheus `/metrics`, JSON logs, a `/health` endpoint that
   reports collector liveness rather than just "the process is up".
 
-> **Status:** pre-1.0 and **not yet licensed** — see [Licensing](#licensing).
-> Read [SECURITY.md](SECURITY.md) before exposing it beyond localhost; the
-> daemon serves plain HTTP, so terminate TLS in front of it.
+> **Status:** pre-1.0. Read [SECURITY.md](SECURITY.md) before exposing it
+> beyond localhost; the daemon serves plain HTTP, so terminate TLS in front of
+> it.
 
 ## Architecture
 
@@ -156,11 +156,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). `make verify` runs everything CI runs.
 
 ## Licensing
 
-**This project does not yet have a LICENSE file**, which means it is "all rights
-reserved" by default: no one else may redistribute or modify it. A license must
-be chosen before publishing or selling. All dependencies are MIT/BSD/Apache with
-no copyleft, so any model — permissive, source-available or proprietary — is
-available.
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Third-party components and their licences are listed in
+[docs/THIRD_PARTY.md](docs/THIRD_PARTY.md). Note that the bundled typefaces
+(Sora, Manrope, JetBrains Mono) are under the SIL Open Font License 1.1, and
+ship as binaries inside `sys-daemon`, so that notice travels with every copy.
 
 ## Documentation
 
