@@ -29,6 +29,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { RuntimeSettingsForm } from './settings/RuntimeSettingsForm';
 
 type SectionID = 'status' | 'configuration' | 'privacy' | 'users' | 'account';
 
@@ -258,6 +259,7 @@ const Settings: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="configuration" className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <RuntimeSettingsForm isAdmin={isAdmin} />
           <Card>
             <CardHeader>
               <SlidersHorizontal className="text-muted-foreground size-4" />

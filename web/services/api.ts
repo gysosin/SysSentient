@@ -611,3 +611,45 @@ export const deleteUser = async (id: string): Promise<void> => {
     const response = await fetchWithTimeout(`${API_BASE_URL}/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!response.ok) throw new Error(await readAPIError(response, 'Failed to delete user'));
 };
+
+/** Settings that can be changed without restarting the daemon. */
+export interface RuntimeSettings {
+  poll_interval_seconds: number;
+  metrics_retention_hours: number;
+  minute_rollup_days: number;
+  five_minute_rollup_days: number;
+  log_level: string;
+}
+
+export async function fetchRuntimeSettings(): Promise<RuntimeSettings | null> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/settings`);
+    if (!res.ok) return null;
+    return (await res.json()) as RuntimeSettings;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Applies a partial settings change.
+ *
+ * Sends only the changed fields: the server treats absent keys as "leave
+ * alone", so posting the whole object would make two admins editing different
+ * settings overwrite each other.
+ */
+export async function updateRuntimeSettings(
+  patch: Partial<RuntimeSettings>,
+): Promise<RuntimeSettings> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    // The server's validation messages name the value and its bounds, which is
+    // exactly what the operator needs to see.
+    throw new Error((await res.text()).trim() || 'Failed to update settings');
+  }
+  return (await res.json()) as RuntimeSettings;
+}

@@ -106,6 +106,8 @@ Rules are currently built in; editing them from the browser is not implemented y
 | `POST /api/alerts/{ruleID}/acknowledge` | key | Silence an active alert |
 | `GET /ws/metrics` | key | Live metric stream |
 | `GET /api/export` | key | Retained history as CSV or JSON (rate limited) |
+| `GET /api/settings` | key | Settings that apply without a restart |
+| `PATCH /api/settings` | admin | Change them live |
 
 ## Backup
 

@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 0 — Land |
 | **Depends on** | nothing |
-| **Status** | not started |
+| **Status** | **done** — merged as PR #2 |
 
 ## Why
 

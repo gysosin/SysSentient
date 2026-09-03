@@ -14,6 +14,13 @@ everything below is the initial published state rather than a delta.
 
 ### Added
 
+- **Poll interval, retention and log level are editable from Settings and take
+  effect immediately.** Previously every setting was read once at boot, so
+  changing how often the machine is sampled meant editing a file and restarting
+  the daemon — which also discards the state you were investigating. Verified
+  live: 3 samples in 6s at a 2s interval, then 8 samples in 8s after the
+  change, with no restart.
+
 - **Backup and export.** `sys-daemon --backup <path>` writes a consistent copy
   while the daemon is running — copying the file with `cp` produces a corrupt
   result, because the database and its write-ahead log must agree — restricts
