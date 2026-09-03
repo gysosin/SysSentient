@@ -7,6 +7,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-09-03
+
+First tagged release. The repository had 100+ commits and zero tags, so
+everything below is the initial published state rather than a delta.
+
 ### Added
 
 - **Cross-platform packages.** A release now produces static binaries for
@@ -176,4 +181,5 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - No TLS; run behind a reverse proxy.
 - Alert rules are built in and not yet editable from the browser.
 
-[Unreleased]: https://github.com/gysosin/SysSentient/commits/main
+[Unreleased]: https://github.com/gysosin/SysSentient/compare/v0.1.0-beta.1...HEAD
+[0.1.0-beta.1]: https://github.com/gysosin/SysSentient/releases/tag/v0.1.0-beta.1
