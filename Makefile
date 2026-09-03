@@ -43,8 +43,12 @@ fmt-check: ## Fail if any Go source is unformatted
 vet: ## go vet
 	go vet ./...
 
-lint: ## golangci-lint (installs on demand)
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...
+# Pinned to match .github/workflows/ci.yml. Running a different version
+# locally than CI runs is how "works on my machine" lint failures happen.
+GOLANGCI_VERSION ?= v2.13.2
+
+lint: ## golangci-lint (installs on demand, pinned to the CI version)
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION) run ./...
 
 vuln: ## Scan Go dependencies for known vulnerabilities
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...

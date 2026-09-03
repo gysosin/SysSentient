@@ -40,9 +40,17 @@ jobs:
         run: go test ./... -race
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
+        # v8 of the action installs golangci-lint v2, which is what
+        # .golangci.yml is written for. The v6 action installs the v1 line,
+        # whose final release (1.64.8) is built with Go 1.24 and refuses to
+        # run against this module's `go 1.25.10` directive.
+        #
+        # Pinned rather than `latest`: a lint gate that silently changes its
+        # own ruleset can turn a previously-green commit red with no code
+        # change, which is how a gate stops being trusted.
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.13.2
 
       - name: Scan Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
