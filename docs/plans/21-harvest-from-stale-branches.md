@@ -74,5 +74,51 @@ git fetch origin '+refs/heads/*:refs/remotes/origin/*'
 git log --oneline --all --reflog | grep '<subject>'
 ```
 
-The full list of harvested commit subjects is preserved above, and the branch
-names are in this file's git history.
+The full list of harvested commit subjects is preserved above. Every deleted
+branch tip is recorded below, so any one can be restored with:
+
+```bash
+git fetch origin <sha>
+git branch <name> <sha>
+```
+
+| Tip | Branch |
+|---|---|
+| `3925e7c32b` | feature/ai-insight-action-copy |
+| `7ba54a00b9` | feature/ai-insight-action-inspector |
+| `84e3d4af69` | feature/ai-insight-action-load-indicator |
+| `903093b823` | feature/ai-insight-action-safety-summary |
+| `0ee33058e9` | feature/ai-insight-clear-filters |
+| `6a26b5afd1` | feature/ai-insight-density-toggle |
+| `72a45390c5` | feature/ai-insight-empty-action-state |
+| `40079589b6` | feature/ai-insight-history-timeline |
+| `0f990565e9` | feature/ai-insight-keyword-search |
+| `1014cfc3fc` | feature/ai-insight-latest-incident-banner |
+| `fb2833e037` | feature/ai-insight-priority-badges |
+| `46da9c9622` | feature/ai-insight-priority-summary |
+| `9e1971e15c` | feature/ai-insight-recency-labels |
+| `654252343b` | feature/ai-insight-restricted-action-counter |
+| `cf901c7dc6` | feature/ai-insight-result-limit |
+| `3da2678272` | feature/ai-insight-safe-action-ratio |
+| `31fcdbb1c4` | feature/ai-insight-severity-summary |
+| `697a57e6fc` | feature/ai-insight-status-filter |
+| `5c71a23883` | feature/ai-insight-status-trend-strip |
+| `a737120806` | feature/critical-alerts-rail |
+| `1b426a115b` | feature/export-insights-json |
+| `81d0915f9b` | feature/export-logs-csv |
+| `29796fa9ad` | feature/export-logs-json |
+| `ac7ae7676b` | feature/export-metrics-csv |
+| `2e0ed317de` | feature/log-clear-filters |
+| `080abdba80` | feature/log-entry-inspector |
+| `bafbefcd98` | feature/log-facility-breakdown |
+| `83455e7028` | feature/log-facility-quick-filters |
+| `01f1cd6f0f` | feature/log-keyword-search |
+| `36781e0b65` | feature/log-pause-tail-control |
+| `2d9f824e09` | feature/log-severity-explorer |
+| `df4b8ea429` | feature/manual-ai-analysis-status-flow |
+| `a0229d220a` | feature/metric-time-range-switcher |
+| `75cb956dd8` | feature/process-resource-sorting |
+| `d32367a891` | feature/process-safe-action-preview |
+| `dbbdb060a0` | feature/process-search-filter |
+| `6ca7d53c82` | feature/saved-dashboard-views |
+| `e42aca8e10` | feature/system-health-command-center |
