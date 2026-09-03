@@ -167,7 +167,7 @@ func TestNewStoreMigratesExistingMetricsTable(t *testing.T) {
 	defer os.Remove(dbPath + "-shm")
 	defer os.Remove(dbPath + "-wal")
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open setup db: %v", err)
 	}
@@ -699,7 +699,7 @@ func TestMigrationNormalizesLegacyLocalTimestamps(t *testing.T) {
 	}
 
 	// Simulate the legacy encoding directly.
-	raw, err := sql.Open("sqlite3", dbPath)
+	raw, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		t.Fatalf("sql.Open() error = %v", err)
 	}

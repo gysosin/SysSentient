@@ -47,6 +47,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The SQLite driver is now pure Go** (`modernc.org/sqlite` replacing
+  `mattn/go-sqlite3`). `CGO_ENABLED=0` builds succeed for linux, windows and
+  darwin on both amd64 and arm64 — previously only linux/amd64 built at all,
+  and only with a C toolchain. Measured cost: writes 120µs → 165µs per sample,
+  which is 0.008% of a two-second poll interval.
+
 - `/api/*` and `/ws/*` now require a session cookie or the `X-API-Key` machine
   token. The previous "no key configured means everything is open" mode is
   gone; `server.insecure: true` is the explicit, loudly-warned escape hatch.
