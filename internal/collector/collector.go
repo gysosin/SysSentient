@@ -331,15 +331,7 @@ func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process,
 }
 
 func formatTopProcesses(processes []models.Process) string {
-	if len(processes) == 0 {
-		return "None"
-	}
-
-	result := make([]string, 0, len(processes))
-	for _, p := range processes {
-		result = append(result, fmt.Sprintf("%s (%.1f%%, %dMB)", p.Name, p.CPU, p.Memory))
-	}
-	return strings.Join(result, ", ")
+	return models.FormatTopProcesses(processes)
 }
 
 func normalizeProcessState(status []string) string {
