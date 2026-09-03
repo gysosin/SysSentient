@@ -14,6 +14,14 @@ everything below is the initial published state rather than a delta.
 
 ### Added
 
+- **Backup and export.** `sys-daemon --backup <path>` writes a consistent copy
+  while the daemon is running — copying the file with `cp` produces a corrupt
+  result, because the database and its write-ahead log must agree — restricts
+  it to `0600` since it holds password hashes and session tokens, and verifies
+  it with `PRAGMA integrity_check` before reporting success. `GET /api/export`
+  serves any retention tier as CSV or JSON, so a year of history is portable
+  rather than trapped in one file on one host.
+
 - **Tiered retention, so history is kept rather than deleted.** Metrics were
   hard-`DELETE`d after 24 hours, so "was this machine slow last Tuesday" had no
   answer. Full-resolution samples are now rolled up into per-minute averages

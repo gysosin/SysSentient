@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 2 — Performance |
 | **Depends on** | 06, 07 |
-| **Status** | not started |
+| **Status** | **done** — online backup, integrity check, CSV/JSON export |
 
 ## Why
 
