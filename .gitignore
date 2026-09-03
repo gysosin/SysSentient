@@ -10,6 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# web/embed.go embeds web/dist, and the embed directive fails to compile when
+# the directory is absent, so a single placeholder is tracked. Git cannot
+# re-include a file whose parent directory is excluded, hence un-excluding the
+# directory first and then excluding its contents.
+!web/dist/
+web/dist/*
+!web/dist/.gitkeep
 .tmp-tests
 *.local
 

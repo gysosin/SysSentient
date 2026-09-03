@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"sys-sentient/internal/pii"
 	"sys-sentient/internal/storage"
 	"sys-sentient/internal/version"
+	"sys-sentient/web"
 	"time"
 )
 
@@ -162,7 +164,7 @@ func (s *Server) routes() http.Handler {
 		ServeWs(s.Hub, w, r)
 	})
 
-	mux.Handle("/", staticHandler("./web/dist"))
+	mux.Handle("/", staticHandler(dashboardFS()))
 	return s.securityHeaders(s.enableCORS(mux))
 }
 
@@ -428,6 +430,58 @@ func setProtectedJSONHeaders(w http.ResponseWriter) {
 	w.Header().Set("Pragma", "no-cache")
 }
 
+// dashboardFS picks the embedded dashboard, falling back to disk.
+//
+// The embedded copy is what makes the binary relocatable and therefore
+// packageable. The disk fallback exists so `npm run build` during development
+// is picked up without recompiling the daemon, and so a binary built before
+// the dashboard was ever built still serves something rather than a blank
+// page. Which one is in use is logged, because "the UI is stale" is otherwise
+// an unpleasant thing to debug.
+func dashboardFS() fs.FS {
+	const devDir = "./web/dist"
+
+	if _, err := os.Stat(filepath.Join(devDir, "index.html")); err == nil {
+		slog.Info("serving dashboard from disk", "path", devDir)
+		return os.DirFS(devDir)
+	}
+
+	if embedded, ok := web.Dist(); ok {
+		return embedded
+	}
+
+	slog.Warn("no dashboard available; the API works but / will 404",
+		"hint", "run `make web` and rebuild, or start the daemon from a directory containing web/dist")
+	return os.DirFS(devDir)
+}
+
+// serveIndex writes the SPA entry point. http.ServeFile needs a real path, so
+// with an fs.FS the file is opened and copied through http.ServeContent, which
+// keeps conditional requests and range handling working.
+func serveIndex(w http.ResponseWriter, r *http.Request, root fs.FS) {
+	f, err := root.Open("index.html")
+	if err != nil {
+		http.Error(w, "dashboard not built", http.StatusNotFound)
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	readSeeker, ok := f.(io.ReadSeeker)
+	if !ok {
+		// embed.FS files implement io.ReadSeeker; a fallback keeps any other
+		// FS implementation working rather than failing the request.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.Copy(w, f)
+		return
+	}
+
+	var modTime time.Time
+	if info, err := f.Stat(); err == nil {
+		modTime = info.ModTime()
+	}
+	http.ServeContent(w, r, "index.html", modTime, readSeeker)
+}
+
 // staticHandler serves the built dashboard with single-page-app semantics.
 //
 // Two behaviours a bare http.FileServer gets wrong here:
@@ -441,9 +495,8 @@ func setProtectedJSONHeaders(w http.ResponseWriter) {
 //
 // Requests under the hashed-asset prefix keep real 404s: silently returning
 // HTML for a missing .js makes cache and deploy bugs invisible.
-func staticHandler(root string) http.Handler {
-	fileServer := http.FileServer(http.Dir(root))
-	indexPath := filepath.Join(root, "index.html")
+func staticHandler(root fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(root))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -464,13 +517,15 @@ func staticHandler(root string) http.Handler {
 		}
 
 		if cleaned != "/" {
-			if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(cleaned))); err == nil && !info.IsDir() {
+			// fs.FS paths are slash-separated and never rooted, so trim the
+			// leading slash rather than converting to an OS path.
+			if info, err := fs.Stat(root, strings.TrimPrefix(cleaned, "/")); err == nil && !info.IsDir() {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
 		}
 
-		http.ServeFile(w, r, indexPath)
+		serveIndex(w, r, root)
 	})
 }
 

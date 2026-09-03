@@ -123,7 +123,6 @@ them. Read them before you do.
 sudo useradd --system --home-dir /var/lib/sys-sentient --shell /usr/sbin/nologin --groups systemd-journal sys-sentient
 sudo mkdir -p /opt/sys-sentient
 sudo cp sys-daemon /opt/sys-sentient/
-sudo cp -r web/dist /opt/sys-sentient/web/dist
 sudo cp sys-sentient.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now sys-sentient
 ```

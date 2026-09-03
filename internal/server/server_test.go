@@ -14,6 +14,7 @@ import (
 	"sys-sentient/internal/models"
 	"sys-sentient/internal/storage"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -309,7 +310,7 @@ func TestSPAFallbackServesIndexForClientRoutes(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	handler := staticHandler(distDir)
+	handler := staticHandler(os.DirFS(distDir))
 
 	tests := []struct {
 		name     string
@@ -356,7 +357,7 @@ func TestStaticHandlerDoesNotListDirectories(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/assets/", nil)
 	rec := httptest.NewRecorder()
-	staticHandler(distDir).ServeHTTP(rec, req)
+	staticHandler(os.DirFS(distDir)).ServeHTTP(rec, req)
 
 	if strings.Contains(rec.Body.String(), "secret.js") {
 		t.Fatalf("directory listing leaked file names: %q", rec.Body.String())
@@ -501,5 +502,42 @@ func TestHealthReportsVersionAndCollectorLiveness(t *testing.T) {
 	}
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("status code = %d, want 503 when degraded", rec.Code)
+	}
+}
+
+// staticHandler must work over any fs.FS, not just a real directory: the
+// daemon serves the dashboard from an embed.FS in every packaged build, and
+// only from disk during development. Exercising it against a synthetic FS
+// catches an os-path assumption creeping back in, which is what made the
+// binary non-relocatable in the first place.
+func TestStaticHandlerServesFromSyntheticFS(t *testing.T) {
+	t.Parallel()
+	fsys := fstest.MapFS{
+		"index.html":        {Data: []byte("<!doctype html><div id=root></div>")},
+		"assets/app-abc.js": {Data: []byte("console.log(1)")},
+		"favicon.svg":       {Data: []byte("<svg/>")},
+	}
+	handler := staticHandler(fsys)
+
+	for _, tc := range []struct {
+		name, path string
+		wantStatus int
+	}{
+		{"root serves index", "/", http.StatusOK},
+		{"real asset is served", "/assets/app-abc.js", http.StatusOK},
+		{"real file is served", "/favicon.svg", http.StatusOK},
+		// A client-side route has no file behind it and must reach the SPA.
+		{"unknown route falls back to index", "/settings", http.StatusOK},
+		// A missing asset must fail loudly rather than silently returning
+		// HTML, which would otherwise surface as a confusing MIME-type error.
+		{"missing asset is not masked by the fallback", "/assets/nope.js", http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("GET %s = %d, want %d", tc.path, rec.Code, tc.wantStatus)
+			}
+		})
 	}
 }

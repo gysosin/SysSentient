@@ -27,7 +27,11 @@ build: web daemon ## Build the dashboard and the daemon
 web: ## Build the dashboard into web/dist
 	cd web && npm ci && npm run build
 
-daemon: ## Build the daemon binary with version stamps
+daemon: ## Build the daemon binary with version stamps (embeds web/dist)
+	# The dashboard is embedded via web/embed.go, so `make web` must run
+	# first for the binary to serve a current UI. Building without it still
+	# compiles - web/dist/.gitkeep satisfies the embed pattern - and the
+	# daemon then falls back to ./web/dist on disk and says so at start-up.
 	go build -trimpath -ldflags "$(LDFLAGS)" -o sys-daemon ./cmd/daemon
 	@./sys-daemon --version
 
