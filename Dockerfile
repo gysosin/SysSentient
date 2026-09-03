@@ -14,7 +14,7 @@ COPY web/ ./
 RUN npm run typecheck \
     && npm run build
 
-FROM golang:1.25-bookworm AS go-builder
+FROM golang:1.27-bookworm AS go-builder
 ARG VERSION=dev
 ARG COMMIT=""
 WORKDIR /src
