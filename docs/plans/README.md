@@ -26,6 +26,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | 18 | [Pages site](18-pages-site.md) | 5 — Docs |
 | 19 | [Repo metadata and wiki](19-repo-metadata-wiki.md) | 5 — Docs |
 | 20 | [Drill-down widgets](20-drilldown-widgets.md) | 4 — Console |
+| 21 | [Harvest from stale branches](21-harvest-from-stale-branches.md) | reference |
 
 ## Working agreement
 
