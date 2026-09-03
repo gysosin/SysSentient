@@ -7,7 +7,7 @@ Type=simple
 User=sys-sentient
 Group=sys-sentient
 SupplementaryGroups=systemd-journal
-ExecStart=/opt/sys-sentient/sys-daemon
+ExecStart=/usr/bin/sys-sentient
 Restart=always
 # Environment variables can be set here or in /etc/sys-sentient/config.yaml
 Environment=SYS_SENTIENT_DATABASE_PATH=/var/lib/sys-sentient/sys-sentient.db

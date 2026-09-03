@@ -19,7 +19,7 @@ binary with the UI embedded.
 - `docs/` — documentation; `docs/plans/` — the work, sharded
 
 Tests live beside the code as `*_test.go`. Built artefacts and local data
-(`sys-daemon`, `web/dist/`, `*.db`, `.env`, `config.yaml`) stay untracked.
+(`sys-sentient`, `web/dist/`, `*.db`, `.env`, `config.yaml`) stay untracked.
 
 ## Commands
 

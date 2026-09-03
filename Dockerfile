@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -ldflags="-s -w \
       -X sys-sentient/internal/version.Version=${VERSION} \
       -X sys-sentient/internal/version.Commit=${COMMIT}" \
-    -o /out/sys-daemon ./cmd/daemon
+    -o /out/sys-sentient ./cmd/daemon
 
 FROM debian:bookworm-slim AS runtime
 ARG VERSION=dev
@@ -53,7 +53,7 @@ RUN apt-get update \
     && chown -R syssentient:syssentient /var/lib/sys-sentient
 
 WORKDIR /app
-COPY --from=go-builder /out/sys-daemon /app/sys-daemon
+COPY --from=go-builder /out/sys-sentient /app/sys-sentient
 COPY --from=web-builder /src/web/dist /app/web/dist
 
 ENV SYS_SENTIENT_DATABASE_PATH=/var/lib/sys-sentient/sys-sentient.db
@@ -64,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${SYS_SENTIENT_SERVER_PORT:-8080}/health" >/dev/null || exit 1
 
 USER syssentient
-ENTRYPOINT ["/app/sys-daemon"]
+ENTRYPOINT ["/app/sys-sentient"]

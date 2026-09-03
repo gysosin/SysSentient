@@ -29,7 +29,7 @@ real failures that a clean `go test` missed.
 ## Running it
 
 ```bash
-make build && ./sys-daemon
+make build && ./sys-sentient
 ```
 
 The dashboard must be built first: it is embedded at compile time. For frontend

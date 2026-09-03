@@ -4,8 +4,8 @@
 
 ```bash
 cd web && npm install && npm run build && cd ..
-go build -o sys-daemon ./cmd/daemon
-./sys-daemon
+go build -o sys-sentient ./cmd/daemon
+./sys-sentient
 ```
 
 The dashboard is served from `web/dist`, so build the frontend before running
@@ -54,5 +54,5 @@ docker build --pull -t sys-sentient:local .
 ## Do not commit
 
 Agent tooling (`.agents/`, `agent/`, `.claude/`, `CLAUDE.md`,
-`skills-lock.json`), build artefacts (`sys-daemon`, `web/dist`), databases
+`skills-lock.json`), build artefacts (`sys-sentient`, `web/dist`), databases
 (`*.db*`) and secrets (`.env`, `config.yaml`). All are gitignored.

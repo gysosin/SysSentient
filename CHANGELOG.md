@@ -27,6 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The installed binary is now `sys-sentient`, not `sys-daemon`.** Everything
+  else already used the product name — the systemd unit, the package, the
+  config directory, the docs — so the old name meant the enrolment command the
+  dashboard tells you to paste (`sys-sentient agent join …`) named a binary
+  that did not exist on an installed system. The packages ship a `sys-daemon`
+  symlink so existing scripts and units keep working.
+
 - **The agent spool is append-only.** Every sample used to be written by
   reading, decoding, re-encoding and rewriting the whole file: **230 ms per
   sample** against a full 5,000-sample buffer, or 11% of a 2-second poll
@@ -47,6 +54,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   do not: reserved blocks mean free space is not total minus used.
 
 ### Fixed
+
+- **The packaged systemd service could not start.** The unit's
+  `ExecStart=/opt/sys-sentient/sys-daemon` named a path no package ever
+  created — the binary installs to `/usr/bin`. Anyone who installed the `.deb`,
+  `.rpm` or `.apk` from v0.1.0-beta.1 and ran `systemctl start sys-sentient`
+  got a failure. Verified by building the packages and checking that the unit's
+  `ExecStart` resolves to a file the package actually contains.
 
 - **An upgraded agent could silently stop reporting.** A spool written in the
   old format and then appended to in the new one parsed as neither, so the

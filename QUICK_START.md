@@ -17,7 +17,7 @@ so each topic has exactly one home rather than three that drift apart.
 
 ```bash
 make build      # dashboard, then daemon
-./sys-daemon    # dashboard on http://localhost:8080
+./sys-sentient    # dashboard on http://localhost:8080
 ```
 
 On first run the daemon logs a one-time setup token. Use it at `/setup` to

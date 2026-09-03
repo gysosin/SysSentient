@@ -32,11 +32,11 @@ daemon: ## Build the daemon binary with version stamps (embeds web/dist)
 	# first for the binary to serve a current UI. Building without it still
 	# compiles - web/dist/.gitkeep satisfies the embed pattern - and the
 	# daemon then falls back to ./web/dist on disk and says so at start-up.
-	go build -trimpath -ldflags "$(LDFLAGS)" -o sys-daemon ./cmd/daemon
-	@./sys-daemon --version
+	go build -trimpath -ldflags "$(LDFLAGS)" -o sys-sentient ./cmd/daemon
+	@./sys-sentient --version
 
 run: ## Run the daemon (requires web/dist)
-	./sys-daemon
+	./sys-sentient
 
 fmt: ## Format Go sources
 	gofmt -w $(GO_FILES)
@@ -81,5 +81,5 @@ docker: ## Build the container image
 		-t sys-sentient:$(VERSION) .
 
 clean: ## Remove build artefacts
-	rm -f sys-daemon
+	rm -f sys-sentient sys-daemon
 	rm -rf web/dist

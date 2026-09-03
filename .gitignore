@@ -22,6 +22,7 @@ web/dist/*
 
 # Binaries and DB
 sys-daemon
+/sys-sentient
 # `go build ./cmd/...` names its output after the package directory.
 /daemon
 *.db
