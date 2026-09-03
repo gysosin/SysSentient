@@ -3,14 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SysSentient - AI System Monitor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0d12" />
+
+    <title>SysSentient — System Monitor</title>
+    <meta name="description" content="Self-hosted Linux system monitor with alerting, live metrics and AI-assisted analysis." />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Open Graph / social preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SysSentient — System Monitor" />
+    <meta property="og:description" content="Self-hosted Linux system monitor with alerting, live metrics and AI-assisted analysis." />
+    <meta name="twitter:card" content="summary" />
+
+    <!-- Fonts are bundled as woff2 via @fontsource-variable and imported from
+         index.css. Nothing is fetched from a font CDN at runtime: this ships to
+         firewalled and air-gapped hosts where such a host is unreachable, and a
+         font that silently falls back is a design that silently changes.
+         Asserted by styles.config.test.ts. -->
   </head>
-  <body class="scanlines">
-    <div class="bg-grid"></div>
+  <body>
     <div id="root"></div>
+    <noscript>
+      SysSentient needs JavaScript. Metrics remain available from the API at
+      <code>/api/metrics</code> and in Prometheus format at <code>/metrics</code>.
+    </noscript>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

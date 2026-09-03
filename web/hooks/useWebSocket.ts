@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SystemMetrics } from '../types';
+import { Process, SystemMetrics } from '../types';
+import { normalizeFilesystems, normalizeProcesses } from '../services/normalize';
 import { metricsWebSocketURL } from '../constants';
 
 interface RawMetricsPayload {
+    hostname?: string;
     timestamp: string;
     cpu_usage?: number;
     cpu_per_core?: number[];
     memory_used?: number;
     memory_total?: number;
+    memory_cached?: number;
+    memory_buffers?: number;
     swap_used?: number;
     swap_total?: number;
     disk_read_bytes?: number;
@@ -19,6 +23,12 @@ interface RawMetricsPayload {
     load_avg_5?: number;
     load_avg_15?: number;
     temperature?: number;
+    uptime_seconds?: number;
+    // Broadcast by the daemon (internal/server/websocket.go:23 sends the full
+    // SystemState). Previously omitted here, so the process table stayed empty
+    // whenever the socket was up.
+    processes?: unknown;
+    filesystems?: unknown;
 }
 
 type WSMessage = {
@@ -41,8 +51,8 @@ function isMetricsMessage(value: unknown): value is Extract<WSMessage, { type: '
 
 interface UseWebSocketReturn {
     connected: boolean;
-    latestMetrics: SystemMetrics | null;
     metricsHistory: SystemMetrics[];
+    processes: Process[];
     reconnect: () => void;
 }
 
@@ -58,8 +68,8 @@ interface RawCounters {
 
 export function useWebSocket(): UseWebSocketReturn {
     const [connected, setConnected] = useState(false);
-    const [latestMetrics, setLatestMetrics] = useState<SystemMetrics | null>(null);
     const [metricsHistory, setMetricsHistory] = useState<SystemMetrics[]>([]);
+    const [processes, setProcesses] = useState<Process[]>([]);
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
@@ -95,11 +105,14 @@ export function useWebSocket(): UseWebSocketReturn {
         lastCountersRef.current = currentCounters;
 
         return {
+            hostname: payload.hostname || '',
             timestamp: t1,
             cpuLoad: payload.cpu_usage || 0,
             cpuPerCore: payload.cpu_per_core || [],
             memoryUsed: (payload.memory_used || 0) / 1024 / 1024,
             memoryTotal: (payload.memory_total || 1) / 1024 / 1024,
+            memoryCached: (payload.memory_cached || 0) / 1024 / 1024,
+            memoryBuffers: (payload.memory_buffers || 0) / 1024 / 1024,
             swapUsed: (payload.swap_used || 0) / 1024 / 1024,
             swapTotal: (payload.swap_total || 0) / 1024 / 1024,
             diskRead: payload.disk_read_bytes ? diskReadRate / 1024 / 1024 : 0,
@@ -111,6 +124,8 @@ export function useWebSocket(): UseWebSocketReturn {
             loadAvg5: payload.load_avg_5 || 0,
             loadAvg15: payload.load_avg_15 || 0,
             temperature: payload.temperature || 0,
+            uptimeSeconds: payload.uptime_seconds || 0,
+            filesystems: normalizeFilesystems(payload.filesystems),
         };
     }, []);
 
@@ -132,7 +147,7 @@ export function useWebSocket(): UseWebSocketReturn {
                     const msg = JSON.parse(event.data) as unknown;
                     if (isMetricsMessage(msg)) {
                         const metrics = parseMetrics(msg.payload);
-                        setLatestMetrics(metrics);
+                        setProcesses(normalizeProcesses(msg.payload.processes));
                         setMetricsHistory(prev => {
                             const newHistory = [...prev, metrics];
                             return newHistory.slice(-MAX_HISTORY);
@@ -191,8 +206,8 @@ export function useWebSocket(): UseWebSocketReturn {
 
     return {
         connected,
-        latestMetrics,
         metricsHistory,
+        processes,
         reconnect,
     };
 }

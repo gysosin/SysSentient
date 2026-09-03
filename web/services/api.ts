@@ -1,5 +1,14 @@
-import type { SystemMetrics, AIAction, AIAnalysisResult, Process, LogEntry } from '../types';
-import { API_BASE_URL, authHeaders } from '../constants.js';
+import type { FleetHost, HealthStatus, Alert, AlertEvent, AlertRule, SystemMetrics, AIAction, AIAnalysisResult, Process, LogEntry } from '../types';
+import { API_BASE_URL } from '../constants.js';
+import {
+    RawProcess,
+    finiteNumber,
+    finiteNumberArray,
+    nonEmptyString,
+    normalizeFilesystems,
+    normalizeProcess,
+    positiveFiniteNumber,
+} from './normalize';
 
 const API_REQUEST_TIMEOUT_MS = 8000;
 
@@ -12,24 +21,19 @@ interface ErrorResponse {
     error?: string;
 }
 
-interface RawProcess {
-    pid?: number;
-    name?: string;
-    user?: string;
-    cpu?: number;
-    memory?: number;
-    state?: unknown;
-}
-
 interface RawSystemState {
+    hostname?: string;
     timestamp: string;
     cpu_usage?: number;
     cpu_per_core?: number[];
     memory_used?: number;
     memory_total?: number;
+    memory_cached?: number;
+    memory_buffers?: number;
     swap_used?: number;
     swap_total?: number;
     temperature?: number;
+    uptime_seconds?: number;
     disk_read_bytes?: number;
     disk_write_bytes?: number;
     disk_iops?: number;
@@ -39,6 +43,7 @@ interface RawSystemState {
     load_avg_5?: number;
     load_avg_15?: number;
     processes?: RawProcess[];
+    filesystems?: unknown;
     top_processes?: string;
 }
 
@@ -48,11 +53,10 @@ interface InsightRecord {
 
 const AI_STATUSES = new Set<AIAnalysisResult['status']>(['Healthy', 'Warning', 'Critical']);
 
-export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
+export const fetchMetricsHistory = async (hostID = ''): Promise<{ metrics: SystemMetrics[], processes: Process[] }> => {
     try {
-        const response = await fetchWithTimeout(`${API_BASE_URL}/metrics`, {
-            headers: authHeaders(),
-        });
+        const query = hostID ? `?host=${encodeURIComponent(hostID)}` : '';
+        const response = await fetchWithTimeout(`${API_BASE_URL}/metrics${query}`);
         if (!response.ok) throw new Error('Failed to fetch metrics');
         const rawData = await response.json() as RawSystemState[]; // Array of models.SystemState
         if (!Array.isArray(rawData)) {
@@ -89,14 +93,19 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
             }
 
             metrics.push({
+                hostname: nonEmptyString(curr.hostname, ''),
                 timestamp: t1,
                 cpuLoad: finiteNumber(curr.cpu_usage),
                 cpuPerCore: finiteNumberArray(curr.cpu_per_core),
                 memoryUsed: finiteNumber(curr.memory_used) / 1024 / 1024,
                 memoryTotal: positiveFiniteNumber(curr.memory_total, 1) / 1024 / 1024,
+                memoryCached: finiteNumber(curr.memory_cached) / 1024 / 1024,
+                memoryBuffers: finiteNumber(curr.memory_buffers) / 1024 / 1024,
                 swapUsed: finiteNumber(curr.swap_used) / 1024 / 1024,
                 swapTotal: finiteNumber(curr.swap_total) / 1024 / 1024,
                 temperature: finiteNumber(curr.temperature),
+                uptimeSeconds: finiteNumber(curr.uptime_seconds),
+                filesystems: normalizeFilesystems(curr.filesystems),
                 diskRead: Math.max(0, diskReadRate / 1024 / 1024), // MB/s
                 diskWrite: Math.max(0, diskWriteRate / 1024 / 1024),
                 diskIOPS: finiteNumber(curr.disk_iops),
@@ -128,7 +137,6 @@ export const fetchMetricsHistory = async (): Promise<{ metrics: SystemMetrics[],
 export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
     const response = await fetchWithTimeout(`${API_BASE_URL}/analyze`, {
         method: 'POST',
-        headers: authHeaders(),
     });
     if (!response.ok) {
         throw new Error(await readAPIError(response, 'Failed to analyze'));
@@ -145,9 +153,7 @@ export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
 
 export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => {
     try {
-        const response = await fetchWithTimeout(`${API_BASE_URL}/insights`, {
-            headers: authHeaders(),
-        });
+        const response = await fetchWithTimeout(`${API_BASE_URL}/insights`);
         if (!response.ok) throw new Error('Failed to fetch insights');
         const data = await response.json() as InsightRecord[]; // Array of {timestamp, content}
 
@@ -179,9 +185,7 @@ export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => 
 
 export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
     try {
-        const response = await fetchWithTimeout(`${API_BASE_URL}/logs`, {
-            headers: authHeaders(),
-        });
+        const response = await fetchWithTimeout(`${API_BASE_URL}/logs`);
         if (!response.ok) throw new Error('Failed to fetch logs');
 
         const data = await response.json() as LogsResponse;
@@ -190,17 +194,6 @@ export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
         console.error("API Error fetchRecentLogs", e);
         return [];
     }
-}
-
-function normalizeProcess(process: RawProcess): Process {
-    return {
-        pid: Math.max(0, Math.trunc(finiteNumber(process.pid))),
-        name: nonEmptyString(process.name, '?'),
-        user: nonEmptyString(process.user, '?'),
-        cpu: finiteNumber(process.cpu),
-        memory: finiteNumber(process.memory),
-        state: normalizeProcessState(process.state)
-    };
 }
 
 function normalizeAnalysisResult(
@@ -255,36 +248,42 @@ function asRecord(value: unknown): Record<string, unknown> | null {
         : null;
 }
 
-function nonEmptyString(value: unknown, fallback: string): string {
-    return typeof value === 'string' && value.trim() ? value : fallback;
-}
-
-function finiteNumber(value: unknown, fallback = 0): number {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function positiveFiniteNumber(value: unknown, fallback: number): number {
-    const parsed = finiteNumber(value, fallback);
-    return parsed > 0 ? parsed : fallback;
-}
-
-function finiteNumberArray(value: unknown): number[] {
-    if (!Array.isArray(value)) {
-        return [];
+export class UnauthorizedError extends Error {
+    constructor() {
+        super('Not authenticated');
+        this.name = 'UnauthorizedError';
     }
-    return value.map((item) => finiteNumber(item));
 }
+
+let unauthorizedHandler: (() => void) | null = null;
+
+/**
+ * AuthProvider registers here so that any *data* request coming back 401 drops
+ * the app to the login screen, instead of rendering a dashboard of zeros
+ * forever the way the old build did.
+ */
+export function onUnauthorized(handler: (() => void) | null): void {
+    unauthorizedHandler = handler;
+}
+
+// A 401 from /api/auth/* is an expected answer ("you are not signed in"), not
+// the loss of a session, so it must not bounce the user anywhere.
+const isAuthRoute = (input: RequestInfo | URL): boolean => String(input).includes('/api/auth/');
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const timeoutID = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
 
     try {
-        return await fetch(input, {
+        const response = await fetch(input, {
+            credentials: 'same-origin',
             ...init,
             signal: controller.signal,
         });
+        if (response.status === 401 && !isAuthRoute(input)) {
+            unauthorizedHandler?.();
+        }
+        return response;
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
             throw new Error('Request timed out');
@@ -302,13 +301,6 @@ async function readAPIError(response: Response, fallback: string): Promise<strin
     } catch {
         return fallback;
     }
-}
-
-function normalizeProcessState(state: unknown): Process['state'] {
-    if (state === 'Running' || state === 'Sleeping' || state === 'Zombie' || state === 'Stopped') {
-        return state;
-    }
-    return 'Running';
 }
 
 function parseProcesses(procStr: string): Process[] {
@@ -373,3 +365,249 @@ function detectLevel(line: string): LogEntry['level'] {
     }
     return 'INFO';
 }
+
+export const fetchActiveAlerts = async (hostID = ''): Promise<Alert[]> => {
+    try {
+        const query = hostID ? `?host=${encodeURIComponent(hostID)}` : '';
+        const response = await fetchWithTimeout(`${API_BASE_URL}/alerts${query}`);
+        if (!response.ok) throw new Error('Failed to fetch alerts');
+        const raw = await response.json() as unknown;
+        if (!Array.isArray(raw)) return [];
+        return raw.map((entry) => {
+            const a = (entry ?? {}) as Record<string, unknown>;
+            return {
+                ruleId: nonEmptyString(a.rule_id, '?'),
+                ruleName: nonEmptyString(a.rule_name, '?'),
+                metric: nonEmptyString(a.metric, ''),
+                state: (a.state === 'pending' || a.state === 'firing' || a.state === 'resolved') ? a.state : 'pending',
+                severity: a.severity === 'critical' ? 'critical' : 'warning',
+                value: finiteNumber(a.value),
+                threshold: finiteNumber(a.threshold),
+                hostname: nonEmptyString(a.hostname, ''),
+                startedAt: nonEmptyString(a.started_at, ''),
+                acknowledged: a.acknowledged === true,
+            } as Alert;
+        });
+    } catch (e) {
+        console.error('API Error fetchActiveAlerts', e);
+        return [];
+    }
+};
+
+export const fetchAlertRules = async (): Promise<AlertRule[]> => {
+    try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/alerts/rules`);
+        if (!response.ok) throw new Error('Failed to fetch alert rules');
+        const raw = await response.json() as unknown;
+        if (!Array.isArray(raw)) return [];
+        return raw.map((entry) => {
+            const r = (entry ?? {}) as Record<string, unknown>;
+            return {
+                id: nonEmptyString(r.id, '?'),
+                name: nonEmptyString(r.name, '?'),
+                metric: nonEmptyString(r.metric, ''),
+                op: nonEmptyString(r.op, '>'),
+                threshold: finiteNumber(r.threshold),
+                forLabel: nonEmptyString(r.for_label, '0s'),
+                severity: r.severity === 'critical' ? 'critical' : 'warning',
+                enabled: r.enabled !== false,
+            } as AlertRule;
+        });
+    } catch (e) {
+        console.error('API Error fetchAlertRules', e);
+        return [];
+    }
+};
+
+export const fetchAlertHistory = async (limit = 50): Promise<AlertEvent[]> => {
+    try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/alerts/history?limit=${limit}`);
+        if (!response.ok) throw new Error('Failed to fetch alert history');
+        const raw = await response.json() as unknown;
+        if (!Array.isArray(raw)) return [];
+        return raw.map((entry) => {
+            const e = (entry ?? {}) as Record<string, unknown>;
+            return {
+                occurredAt: nonEmptyString(e.occurred_at, ''),
+                ruleId: nonEmptyString(e.rule_id, '?'),
+                ruleName: nonEmptyString(e.rule_name, '?'),
+                metric: nonEmptyString(e.metric, ''),
+                state: (e.state === 'pending' || e.state === 'firing' || e.state === 'resolved') ? e.state : 'firing',
+                severity: e.severity === 'critical' ? 'critical' : 'warning',
+                value: finiteNumber(e.value),
+                threshold: finiteNumber(e.threshold),
+                hostname: nonEmptyString(e.hostname, ''),
+            } as AlertEvent;
+        });
+    } catch (e) {
+        console.error('API Error fetchAlertHistory', e);
+        return [];
+    }
+};
+
+export const acknowledgeAlert = async (ruleId: string, hostID = ''): Promise<void> => {
+    const query = hostID ? `?host=${encodeURIComponent(hostID)}` : '';
+    const response = await fetchWithTimeout(`${API_BASE_URL}/alerts/${encodeURIComponent(ruleId)}/acknowledge${query}`, {
+        method: 'POST',
+    });
+    if (!response.ok) {
+        throw new Error(await readAPIError(response, 'Failed to acknowledge alert'));
+    }
+};
+
+// /health is unauthenticated and lives outside the /api prefix.
+const HEALTH_URL = API_BASE_URL.replace(/\/api\/?$/, '') + '/health';
+
+export const fetchHealth = async (): Promise<HealthStatus | null> => {
+    try {
+        // A degraded daemon answers 503 with a valid body, so the response is
+        // parsed regardless of status rather than treated as a failure.
+        const response = await fetchWithTimeout(HEALTH_URL);
+        const h = await response.json() as Record<string, unknown>;
+        return {
+            status: nonEmptyString(h.status, 'unknown'),
+            service: nonEmptyString(h.service, 'sys-sentient'),
+            database: nonEmptyString(h.database, 'unknown'),
+            version: nonEmptyString(h.version, ''),
+            commit: nonEmptyString(h.commit, ''),
+            collector: nonEmptyString(h.collector, ''),
+            lastSampleAgeSeconds: typeof h.last_sample_age_seconds === 'number' ? h.last_sample_age_seconds : undefined,
+            websocketClients: typeof h.websocket_clients === 'number' ? h.websocket_clients : undefined,
+        };
+    } catch (e) {
+        console.error('API Error fetchHealth', e);
+        return null;
+    }
+};
+
+export const fetchHosts = async (): Promise<FleetHost[]> => {
+    try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/hosts`);
+        if (!response.ok) throw new Error('Failed to fetch hosts');
+        const raw = await response.json() as unknown;
+        if (!Array.isArray(raw)) return [];
+        return raw.map((entry) => {
+            const h = (entry ?? {}) as Record<string, unknown>;
+            return {
+                hostId: nonEmptyString(h.host_id, ''),
+                hostname: nonEmptyString(h.hostname, 'unknown'),
+                firstSeen: nonEmptyString(h.first_seen, ''),
+                lastSeen: nonEmptyString(h.last_seen, ''),
+                agentVersion: nonEmptyString(h.agent_version, ''),
+            } as FleetHost;
+        }).filter((h) => h.hostId !== '');
+    } catch (e) {
+        console.error('API Error fetchHosts', e);
+        return [];
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Authentication
+// ---------------------------------------------------------------------------
+
+export interface AuthUser {
+    id: string;
+    email: string;
+    role: 'admin' | 'viewer';
+}
+
+export interface ManagedUser extends AuthUser {
+    createdAt: string;
+    lastLoginAt: string | null;
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+function asAuthUser(payload: unknown): AuthUser {
+    const record = asRecord(payload);
+    const user = asRecord(record?.user) ?? record;
+    return {
+        id: nonEmptyString(user?.id, ''),
+        email: nonEmptyString(user?.email, ''),
+        role: user?.role === 'admin' ? 'admin' : 'viewer',
+    };
+}
+
+/** Resolves the current session. null means "not signed in", not an error. */
+export const fetchMe = async (): Promise<AuthUser | null> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/auth/me`);
+    if (response.status === 401) return null;
+    if (!response.ok) throw new Error(await readAPIError(response, 'Failed to load session'));
+    return asAuthUser(await response.json());
+};
+
+/** True while the daemon has no accounts and is waiting for first-run setup. */
+export const fetchSetupStatus = async (): Promise<boolean> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/auth/setup`);
+    if (!response.ok) throw new Error(await readAPIError(response, 'Failed to check setup state'));
+    return asRecord(await response.json())?.needsSetup === true;
+};
+
+export const login = async (email: string, password: string): Promise<AuthUser> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ email, password }),
+    });
+    if (response.status === 401) throw new Error('Invalid email or password');
+    if (response.status === 429) throw new Error('Too many attempts. Try again in a minute.');
+    if (!response.ok) throw new Error(await readAPIError(response, 'Sign-in failed'));
+    return asAuthUser(await response.json());
+};
+
+export const logout = async (): Promise<void> => {
+    await fetchWithTimeout(`${API_BASE_URL}/auth/logout`, { method: 'POST' });
+};
+
+export const completeSetup = async (token: string, email: string, password: string): Promise<AuthUser> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/auth/setup`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ token, email, password }),
+    });
+    if (response.status === 403) throw new Error('That setup token is not valid. Check the daemon log.');
+    if (response.status === 409) throw new Error('Setup has already been completed. Sign in instead.');
+    if (!response.ok) throw new Error(await readAPIError(response, 'Setup failed'));
+    return asAuthUser(await response.json());
+};
+
+export const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/auth/password`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (!response.ok) throw new Error(await readAPIError(response, 'Password change failed'));
+};
+
+function asManagedUser(payload: unknown): ManagedUser {
+    const record = asRecord(payload);
+    return {
+        ...asAuthUser(record),
+        createdAt: nonEmptyString(record?.createdAt, ''),
+        lastLoginAt: typeof record?.lastLoginAt === 'string' ? record.lastLoginAt : null,
+    };
+}
+
+export const fetchUsers = async (): Promise<ManagedUser[]> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/users`);
+    if (!response.ok) throw new Error(await readAPIError(response, 'Failed to load users'));
+    const payload = await response.json();
+    return Array.isArray(payload) ? payload.map(asManagedUser) : [];
+};
+
+export const createUser = async (email: string, password: string, role: AuthUser['role']): Promise<ManagedUser> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/users`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ email, password, role }),
+    });
+    if (!response.ok) throw new Error(await readAPIError(response, 'Failed to create user'));
+    return asManagedUser(await response.json());
+};
+
+export const deleteUser = async (id: string): Promise<void> => {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(await readAPIError(response, 'Failed to delete user'));
+};

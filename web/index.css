@@ -1,61 +1,409 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-body {
-  background-color: #050a10;
-  color: #e2e8f0;
-  font-family: 'JetBrains Mono', monospace;
-  overflow-x: hidden;
+/* Self-hosted variable fonts. This product ships to firewalled and air-gapped
+   hosts, so nothing may be fetched from a CDN at runtime — the previous build
+   linked fonts.googleapis.com and silently fell back to system faces wherever
+   that was unreachable, which is most of the target market. Bundled woff2
+   subsets make the typography a guarantee rather than a hope. */
+@import "@fontsource-variable/sora";
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Tailwind v4 does not auto-load tailwind.config.js. Without this directive the
+   custom palette compiles to nothing and every class using it becomes a silent
+   no-op — which is exactly what happened to the previous design system.
+   Guarded by styles.config.test.ts + `npm run verify:css`. */
+@config "./tailwind.config.js";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Design system — ported from the "cortex-sentinel-insight" reference.
+
+  Components reference semantic roles (--panel, --line, --mute) rather than raw
+  colours, so the whole console can be re-themed from this one block. Dark is
+  the default: this is an operations console people leave open on a wall
+  display.
+
+  Colour is oklch throughout. Perceptual lightness is what makes a severity
+  ramp legible across a room, and oklch lets warn and crit sit at the same
+  apparent brightness so neither shouts louder than its meaning.
+
+  The ground is blue-black (hue 260) rather than neutral grey — it reads as an
+  instrument rather than a document. Brand is coral at hue 35 and carries
+  identity and liveness. Amber (hue 85) is reserved for one thing: the AI
+  feature, so a machine's opinion never wears the same colour as a measured
+  fact. Operational status owns green / amber / red and nothing else competes
+  with it.
+*/
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(0.11 0.015 260);
+  --foreground: oklch(0.93 0.012 250);
+
+  --card: oklch(0.15 0.018 260);
+  --card-foreground: oklch(0.93 0.012 250);
+
+  --popover: oklch(0.15 0.018 260);
+  --popover-foreground: oklch(0.93 0.012 250);
+
+  --primary: oklch(0.72 0.16 35);
+  --primary-foreground: oklch(0.12 0.015 260);
+
+  --secondary: oklch(0.2 0.02 260);
+  --secondary-foreground: oklch(0.93 0.012 250);
+
+  --muted: oklch(0.2 0.02 260);
+  --muted-foreground: oklch(0.65 0.025 250);
+
+  /* Amber. The AI accent, used sparingly. */
+  --accent: oklch(0.8 0.14 85);
+  --accent-foreground: oklch(0.12 0.015 260);
+
+  --destructive: oklch(0.68 0.2 25);
+  --destructive-foreground: oklch(0.97 0.01 250);
+
+  --border: oklch(0.26 0.025 260);
+  --input: oklch(0.26 0.025 260);
+  --ring: oklch(0.72 0.16 35);
+
+  /* Identity. --brand is the same coral as --primary but named for intent:
+     --primary is "the button you press", --brand is "this product is alive". */
+  --brand: oklch(0.72 0.16 35);
+  --brand-soft: oklch(0.72 0.16 35 / 0.14);
+
+  /* Surfaces. --panel is a section; --panel-strong is a row or control resting
+     on one. Two steps is enough — a third reads as noise at this density. */
+  --panel: oklch(0.15 0.018 260);
+  --panel-strong: oklch(0.19 0.022 260);
+
+  /* Every divider in the console. Named separately from --border so a hairline
+     between table rows can be tuned without touching input outlines. */
+  --line: oklch(0.26 0.025 260);
+
+  /* The secondary-text ramp. --mute is readable supporting text; --melt is
+     furniture — units, separators, placeholder glyphs — that must recede
+     without disappearing. */
+  --mute: oklch(0.65 0.025 250);
+  --melt: oklch(0.43 0.025 250);
+
+  /* Operational status. The only colours allowed to mean something. */
+  --ok: oklch(0.76 0.16 155);
+  --warn: oklch(0.8 0.14 85);
+  --crit: oklch(0.68 0.2 25);
+  --info: oklch(0.72 0.13 240);
+
+  /* Tinted grounds for status rows, at a lightness that keeps foreground text
+     above AA on top of them. */
+  --ok-soft: oklch(0.76 0.16 155 / 0.12);
+  --warn-soft: oklch(0.8 0.14 85 / 0.14);
+  --crit-soft: oklch(0.68 0.2 25 / 0.14);
+
+  /* A stronger border for table rules and dividers that must read at depth. */
+  --border-strong: oklch(0.36 0.03 260);
+
+  /* Chart series, ordered for categorical distinctness. */
+  --chart-1: oklch(0.72 0.16 35);
+  --chart-2: oklch(0.72 0.13 240);
+  --chart-3: oklch(0.8 0.14 85);
+  --chart-4: oklch(0.68 0.2 25);
+  --chart-5: oklch(0.76 0.16 155);
 }
 
-/* Tech Background Grid */
-.bg-grid {
-  background-size: 50px 50px;
+/* Light theme, for anyone running this on a bright desk. Status colours step
+   down in lightness so they stay legible on a pale ground rather than glowing,
+   and the brand darkens enough to hold contrast against white panels. */
+.light {
+  --background: oklch(0.97 0.01 250);
+  --foreground: oklch(0.2 0.025 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.025 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.025 260);
+  --primary: oklch(0.58 0.18 35);
+  --primary-foreground: oklch(0.99 0.005 250);
+  --secondary: oklch(0.93 0.015 250);
+  --secondary-foreground: oklch(0.22 0.025 260);
+  --muted: oklch(0.93 0.015 250);
+  --muted-foreground: oklch(0.45 0.03 250);
+  --accent: oklch(0.65 0.14 85);
+  --accent-foreground: oklch(0.16 0.02 260);
+  --destructive: oklch(0.58 0.2 25);
+  --destructive-foreground: oklch(0.99 0.005 250);
+  --border: oklch(0.86 0.02 250);
+  --input: oklch(0.86 0.02 250);
+  --ring: oklch(0.58 0.18 35);
+  --brand: oklch(0.58 0.18 35);
+  --brand-soft: oklch(0.58 0.18 35 / 0.12);
+  --panel: oklch(1 0 0);
+  --panel-strong: oklch(0.94 0.015 250);
+  --line: oklch(0.86 0.02 250);
+  --mute: oklch(0.45 0.03 250);
+  --melt: oklch(0.6 0.025 250);
+  --ok: oklch(0.55 0.16 155);
+  --warn: oklch(0.68 0.14 85);
+  --crit: oklch(0.58 0.2 25);
+  --info: oklch(0.5 0.13 240);
+  --ok-soft: oklch(0.55 0.16 155 / 0.12);
+  --warn-soft: oklch(0.68 0.14 85 / 0.13);
+  --crit-soft: oklch(0.58 0.2 25 / 0.12);
+  --border-strong: oklch(0.74 0.025 250);
+  --chart-1: oklch(0.58 0.18 35);
+  --chart-2: oklch(0.5 0.13 240);
+  --chart-3: oklch(0.68 0.14 85);
+  --chart-4: oklch(0.58 0.2 25);
+  --chart-5: oklch(0.55 0.16 155);
+}
+
+/* Map the tokens into Tailwind's theme so `bg-panel`, `text-mute`,
+   `border-line` etc. exist as utilities. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-line: var(--line);
+  --color-mute: var(--mute);
+  --color-melt: var(--melt);
+
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-crit: var(--crit);
+  --color-info: var(--info);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn-soft: var(--warn-soft);
+  --color-crit-soft: var(--crit-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Near-square. Generous radii read as consumer software; an instrument wants
+     corners that stay out of the way. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Sora carries headings only — uppercase, tight, and large. Manrope is the
+     reading face. Everything numeric is mono so columns of digits align and a
+     value changing width cannot shift the layout around it. */
+  --font-display: "Sora Variable", "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible keyboard focus. Tailwind's preflight strips the UA outline and the
+     original UI replaced it with nothing, so buttons were invisible when
+     focused. Administrators live on keyboards. */
+  :where(a, button, [role="button"], input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background: var(--brand-soft);
+    color: var(--foreground);
+  }
+
+  /* Numeric readouts must not jitter as digits change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+/* Ambient ground: a faint 34px rule grid. Gives the console the feel of a
+   measuring instrument without the CRT-filter gimmick of the original theme. */
+.gridbg {
   background-image:
-    linear-gradient(to right, rgba(0, 243, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
+    linear-gradient(color-mix(in oklab, var(--foreground) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 3%, transparent) 1px, transparent 1px);
+  background-size: 34px 34px;
 }
 
-/* CRT Scanline Effect */
-.scanlines::before {
-  content: " ";
-  display: block;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-  z-index: 100;
-  background-size: 100% 2px, 3px 100%;
+/* Panel elevation. Expressed as a class because a multi-layer shadow with
+   commas does not survive Tailwind's arbitrary-value syntax. */
+.elevated {
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, white 4%, transparent),
+    0 1px 2px 0 rgb(0 0 0 / 0.35),
+    0 12px 32px -16px rgb(0 0 0 / 0.7);
+}
+
+/* The liveness dot. Deliberately a slow opacity fade rather than a scale ping:
+   this repeats 2,250 times an hour on a wall display, and anything that moves
+   is intolerable at that count. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-pulse {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* A slow sweep across the hero panel. 7s is long enough to register as ambient
+   rather than as an animation demanding attention. */
+@keyframes sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.scanline {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0b0f19;
-}
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 0;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #00f3ff;
+.scanline::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--foreground) 5%, transparent),
+    transparent
+  );
+  animation: sweep 7s linear infinite;
 }
 
-/* Utilities */
-.text-glow {
-  text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+/* Shimmer used by skeletons. */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
-.border-glow {
-  box-shadow: 0 0 10px rgba(0, 243, 255, 0.1), inset 0 0 10px rgba(0, 243, 255, 0.05);
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--foreground) 6%, transparent),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Skip link, revealed on focus. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--ring);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+  border: 3px solid var(--background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mute);
+}
+
+/* Respect users who ask for reduced motion: the console animates a lot, and
+   nothing here may depend on animation to be understood. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .live-pulse,
+  .scanline::before {
+    animation: none !important;
+  }
 }

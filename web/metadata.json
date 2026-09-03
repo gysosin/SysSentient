@@ -1,5 +1,0 @@
-{
-  "name": "SysSentient",
-  "description": "A React-based dashboard for the SysSentient AI-Powered Linux Task Manager. Visualizes real-time system metrics, processes, and logs, utilizing Google Gemini to analyze performance anomalies and suggest fixes.",
-  "requestFramePermissions": []
-}
