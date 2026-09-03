@@ -48,7 +48,7 @@ jobs:
         # Pinned rather than `latest`: a lint gate that silently changes its
         # own ruleset can turn a previously-green commit red with no code
         # change, which is how a gate stops being trusted.
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
 
