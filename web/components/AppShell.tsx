@@ -108,8 +108,8 @@ function NavItems({
               variant === 'tabs'
                 ? // A phone target, not a link: full height, centred, and wide
                   // enough for a thumb rather than a cursor.
-                  'relative flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] tracking-wide'
-                : 'flex shrink-0 items-center gap-2 text-[12px]',
+                  'relative flex min-h-14 flex-col items-center justify-center gap-1 text-2xs tracking-wide'
+                : 'flex shrink-0 items-center gap-2 text-2xs',
               variant === 'bar' && 'border-b-2 pb-1.5',
               variant === 'chips' && 'rounded-md border px-3 py-2',
               active
@@ -139,7 +139,7 @@ function NavItems({
                   a chip beside a 9px label. */}
               {variant === 'tabs' && item.to === '/alerts' && firingAlerts > 0 && (
                 <span
-                  className="bg-crit text-background absolute -top-1.5 -right-2 grid min-w-4 place-items-center rounded-full px-1 font-mono text-[9px] font-bold"
+                  className="bg-crit text-background absolute -top-1.5 -right-2 grid min-w-4 place-items-center rounded-full px-1 font-mono text-2xs font-bold"
                   aria-label={`${firingAlerts} firing`}
                 >
                   {firingAlerts}
@@ -152,7 +152,7 @@ function NavItems({
                 that is left open all day. */}
             {variant !== 'tabs' && item.to === '/alerts' && firingAlerts > 0 && (
               <span
-                className="bg-crit-soft text-crit tabular rounded-full px-1.5 py-0.5 font-mono text-[9px] font-bold"
+                className="bg-crit-soft text-crit tabular rounded-full px-1.5 py-0.5 font-mono text-2xs font-bold"
                 aria-label={`${firingAlerts} firing`}
               >
                 {firingAlerts}
@@ -200,7 +200,7 @@ const AppShell: React.FC<Props> = ({
       </a>
 
       <header className="bg-background/95 border-line sticky top-0 z-50 border-b backdrop-blur-sm">
-        <div className="mx-auto flex min-h-16 w-full max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6">
+        <div className="flex min-h-16 w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 2xl:px-10">
           {/* The mark carries the product's identity in the display face, with
               the deployment model stated underneath — this is sold as
               self-hosted, and the header is where that is claimed. */}
@@ -212,10 +212,10 @@ const AppShell: React.FC<Props> = ({
               {/* Tracking is the first thing to give up on a narrow screen: at
                   0.18em the wordmark alone pushed the feed chip onto a second
                   row, which cost more than the letterspacing was worth. */}
-              <span className="font-display block truncate text-[13px] font-semibold tracking-[0.1em] uppercase sm:text-[15px] sm:tracking-[0.18em]">
+              <span className="font-display block truncate text-xs font-semibold tracking-[0.1em] uppercase sm:text-[15px] sm:tracking-[0.18em]">
                 SysSentient
               </span>
-              <span className="text-mute mt-1 hidden truncate text-[10px] tracking-[0.28em] uppercase sm:block">
+              <span className="text-mute mt-1 hidden truncate text-2xs tracking-[0.28em] uppercase sm:block">
                 Self-hosted console
               </span>
             </span>
@@ -224,7 +224,7 @@ const AppShell: React.FC<Props> = ({
           <div className="ml-auto flex items-center gap-2.5 sm:gap-3">
             <div
               className={cn(
-                'flex items-center gap-2 rounded-md border px-2.5 py-2 text-[11px] font-semibold tracking-wider',
+                'flex items-center gap-2 rounded-md border px-2.5 py-2 text-2xs font-semibold tracking-wider',
                 tone.chip,
               )}
               role="status"
@@ -293,7 +293,7 @@ const AppShell: React.FC<Props> = ({
                 </SelectContent>
               </Select>
             ) : (
-              <span className="text-foreground hidden font-mono text-[12px] lg:inline">
+              <span className="text-foreground hidden font-mono text-2xs lg:inline">
                 {hostname}
               </span>
             )}
@@ -307,21 +307,21 @@ const AppShell: React.FC<Props> = ({
             get the bottom tab bar instead. */}
         <nav
           aria-label="Sections"
-          className="mx-auto hidden w-full max-w-[1600px] gap-1 px-4 pb-2 sm:px-6 md:flex lg:hidden"
+          className="hidden w-full gap-1 px-4 pb-2 sm:px-6 md:flex lg:hidden"
         >
           <NavItems variant="chips" firingAlerts={firingAlerts} />
         </nav>
       </header>
 
       <div
-        className="border-line mx-auto hidden w-full max-w-[1600px] items-center gap-5 overflow-x-auto border-b px-6 py-2.5 lg:flex"
+        className="border-line hidden w-full items-center gap-5 overflow-x-auto border-b px-6 py-2.5 lg:flex 2xl:px-10"
         aria-label="Sections"
       >
         <NavItems variant="bar" firingAlerts={firingAlerts} />
         {/* Uptime and last-sync are the two facts that qualify everything else
             on screen, so they sit in the chrome rather than inside any one
             panel. Mono keeps them from reflowing as the clock ticks. */}
-        <span className="text-melt tabular ml-auto flex shrink-0 items-center gap-2 font-mono text-[10px] tracking-wider uppercase">
+        <span className="text-melt tabular ml-auto flex shrink-0 items-center gap-2 font-mono text-2xs tracking-wider uppercase">
           Uptime <span className="text-foreground">{uptimeLabel}</span>
           <span className="text-line">/</span>
           Last sync <span className="text-foreground">{lastSyncLabel(feed.ageMs)} UTC</span>
@@ -337,7 +337,7 @@ const AppShell: React.FC<Props> = ({
             className="border-accent/40 bg-accent/10 text-accent overflow-hidden border-b"
             role="status"
           >
-            <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-4 py-2.5 text-[12px] sm:px-6">
+            <div className="flex w-full items-center gap-3 px-4 py-2.5 text-2xs sm:px-6">
               <Pause className="size-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0">
                 <strong className="tracking-wider uppercase">Frozen</strong> You are holding the
@@ -370,7 +370,7 @@ const AppShell: React.FC<Props> = ({
             )}
             role="alert"
           >
-            <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-4 py-2.5 text-[12px] sm:px-6">
+            <div className="flex w-full items-center gap-3 px-4 py-2.5 text-2xs sm:px-6">
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0">
                 <strong className="tracking-wider uppercase">
@@ -396,7 +396,7 @@ const AppShell: React.FC<Props> = ({
       {/* pb-24 on phones keeps the last panel clear of the fixed tab bar. */}
       <main
         id="main"
-        className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 pb-24 sm:px-6 md:pb-6 lg:py-7"
+        className="w-full flex-1 px-4 py-6 pb-24 sm:px-6 md:pb-6 lg:py-7 2xl:px-10"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -411,7 +411,7 @@ const AppShell: React.FC<Props> = ({
         </AnimatePresence>
       </main>
 
-      <footer className="border-line text-mute mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3 border-t px-6 py-5 pb-24 text-[11px] md:pb-5">
+      <footer className="border-line text-mute flex w-full flex-wrap items-center justify-between gap-3 border-t px-6 py-5 pb-24 text-2xs md:pb-5">
         <div className="flex flex-wrap items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span

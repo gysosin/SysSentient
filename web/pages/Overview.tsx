@@ -152,7 +152,7 @@ function Stat({
       <CardContent className="px-3.5 pt-3.5 pb-4">
         <div className="flex items-center gap-1.5">
           <Icon className="text-melt size-3.5 shrink-0" aria-hidden="true" />
-          <span className="text-mute truncate text-[10px] font-medium tracking-[0.2em] uppercase">
+          <span className="text-mute truncate text-2xs font-medium tracking-[0.2em] uppercase">
             {label}
           </span>
         </div>
@@ -186,7 +186,7 @@ function Stat({
 
         {/* A <p> cannot legally contain the Skeleton's <div>, and React warns
             that it will break hydration. Use a block-level wrapper. */}
-        <div className="text-mute tabular mt-2 truncate text-[11px]" title={sub}>
+        <div className="text-mute tabular mt-2 truncate text-2xs" title={sub}>
           {loading ? <Skeleton className="h-3 w-32" /> : sub}
         </div>
 
@@ -236,7 +236,7 @@ function CoreGrid({ cores }: { cores: number[] }) {
             key={i}
             className="bg-panel-strong border-line flex flex-col gap-1.5 rounded-md border px-2 py-1.5"
           >
-            <span className="text-melt font-mono text-[9px] tracking-wide">C{i}</span>
+            <span className="text-melt font-mono text-2xs tracking-wide">C{i}</span>
 
             {/* Explicit track: without a visible empty region the fill has
                 nothing to be a proportion of. */}
@@ -251,7 +251,7 @@ function CoreGrid({ cores }: { cores: number[] }) {
 
             <span
               className={cn(
-                'tabular font-mono text-[10px] font-medium',
+                'tabular font-mono text-2xs font-medium',
                 critical ? 'text-crit' : busy ? 'text-warn' : 'text-mute',
               )}
             >
@@ -280,7 +280,7 @@ function Kpi({
 }) {
   return (
     <div className="bg-panel p-4 sm:p-5">
-      <div className="text-mute text-[10px] tracking-[0.2em] uppercase">{label}</div>
+      <div className="text-mute text-2xs tracking-[0.2em] uppercase">{label}</div>
       <div className="mt-2 flex items-end gap-2">
         <span className={cn('font-display tabular text-3xl leading-none font-bold', tone)}>
           {value}
@@ -296,7 +296,7 @@ function Kpi({
           />
         </div>
       )}
-      <div className="text-mute mt-2 text-[11px]">{detail}</div>
+      <div className="text-mute mt-2 text-2xs">{detail}</div>
     </div>
   );
 }
@@ -385,7 +385,7 @@ const Overview: React.FC = () => {
       <section className="border-line bg-panel relative overflow-hidden rounded-xl border px-5 py-7 sm:px-8 md:py-10">
         <div className="scanline" aria-hidden="true" />
         <div className="relative max-w-3xl">
-          <div className="text-mute flex flex-wrap items-center gap-3 text-[10px] font-semibold tracking-[0.22em] uppercase">
+          <div className="text-mute flex flex-wrap items-center gap-3 text-2xs font-semibold tracking-[0.22em] uppercase">
             <span
               className={cn(
                 'size-2 rounded-full',
@@ -442,7 +442,7 @@ const Overview: React.FC = () => {
                 <ChevronRight aria-hidden="true" />
               </Link>
             </Button>
-            <span className="text-mute text-[11px]">
+            <span className="text-mute text-2xs">
               {loading ? 'awaiting first sample' : `last sample ${feed.detail}`}
             </span>
           </div>
@@ -601,7 +601,7 @@ const Overview: React.FC = () => {
               eyebrow="Current attention"
               title="Process triage"
               action={
-                <span className="text-mute tabular font-mono text-[10px]">
+                <span className="text-mute tabular font-mono text-2xs">
                   {processes.length} running
                 </span>
               }
@@ -633,30 +633,30 @@ const Overview: React.FC = () => {
                         to survive peripheral vision and colour-blindness. */}
                     <span
                       className={cn(
-                        'grid size-9 shrink-0 place-items-center rounded-md font-mono text-[10px] font-semibold',
+                        'grid size-9 shrink-0 place-items-center rounded-md font-mono text-2xs font-semibold',
                         crit ? 'bg-crit/15 text-crit' : 'bg-ok/10 text-ok',
                       )}
                     >
                       {crit ? 'CRIT' : 'OK'}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-foreground truncate text-[13px] font-medium">
+                      <p className="text-foreground truncate text-xs font-medium">
                         {p.name} <span className="text-mute font-mono">· {p.pid}</span>
                       </p>
-                      <p className="text-mute truncate text-[11px]">
+                      <p className="text-mute truncate text-2xs">
                         {p.user} · {p.memory.toFixed(0)} MB resident · {p.state.toLowerCase()}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p
                         className={cn(
-                          'tabular font-mono text-[13px]',
+                          'tabular font-mono text-xs',
                           crit ? 'text-crit' : 'text-foreground',
                         )}
                       >
                         {p.cpu.toFixed(1)}%
                       </p>
-                      <p className="text-melt text-[10px]">cpu</p>
+                      <p className="text-melt text-2xs">cpu</p>
                     </div>
                   </div>
                 );
@@ -679,14 +679,14 @@ const Overview: React.FC = () => {
               eyebrow="Accountable assistance"
               title="AI diagnosis"
               action={
-                <span className="text-mute font-mono text-[10px]">
+                <span className="text-mute font-mono text-2xs">
                   {ai.result ? ai.result.status.toLowerCase() : 'not run'}
                 </span>
               }
             />
 
             <div className="border-line bg-panel-strong mt-5 rounded-lg border p-4">
-              <div className="text-accent flex items-center gap-2 text-[10px] font-semibold tracking-[0.2em] uppercase">
+              <div className="text-accent flex items-center gap-2 text-2xs font-semibold tracking-[0.2em] uppercase">
                 <BrainCircuit className="size-3.5" aria-hidden="true" />
                 {ai.error
                   ? 'Analysis failed'
@@ -703,7 +703,7 @@ const Overview: React.FC = () => {
                   <Skeleton className="h-3 w-4/5" />
                 </div>
               ) : (
-                <p className="text-foreground/85 mt-3 text-[13px] leading-relaxed">
+                <p className="text-foreground/85 mt-3 text-xs leading-relaxed">
                   {ai.error
                     ? ai.error
                     : (ai.result?.summary ??
@@ -717,7 +717,7 @@ const Overview: React.FC = () => {
                     <span
                       key={action.id}
                       className={cn(
-                        'rounded-full border px-2.5 py-1 font-mono text-[10px]',
+                        'rounded-full border px-2.5 py-1 font-mono text-2xs',
                         action.isSafe
                           ? 'border-line bg-panel text-mute'
                           : 'border-crit/40 bg-crit-soft text-crit',
@@ -745,7 +745,7 @@ const Overview: React.FC = () => {
             {/* Non-negotiable. The model suggests shell commands, and the design
                 has to make that read as advice to evaluate, never an
                 instruction to obey. */}
-            <p className="text-mute mt-4 text-[11px]">
+            <p className="text-mute mt-4 text-2xs">
               AI suggestions are advisory. Commands are shown for review and are never executed
               automatically.
             </p>
@@ -760,7 +760,7 @@ const Overview: React.FC = () => {
               eyebrow="Composition"
               title="Memory allocation"
               action={
-                <span className="text-mute tabular font-mono text-[10px]">
+                <span className="text-mute tabular font-mono text-2xs">
                   {(current.memoryTotal / 1024).toFixed(1)} GB total
                 </span>
               }
@@ -788,7 +788,7 @@ const Overview: React.FC = () => {
               />
             </div>
 
-            <dl className="mt-4 space-y-2.5 text-[12px]">
+            <dl className="mt-4 space-y-2.5 text-2xs">
               {[
                 {
                   key: 'app',
@@ -839,7 +839,7 @@ const Overview: React.FC = () => {
             </dl>
 
             {!hasMemoryComposition && !loading && (
-              <p className="text-mute mt-3 text-[11px] leading-relaxed">
+              <p className="text-mute mt-3 text-2xs leading-relaxed">
                 This host reports no cache or buffer breakdown, so everything in use is shown as
                 application memory.
               </p>
@@ -847,7 +847,7 @@ const Overview: React.FC = () => {
 
             <div className="border-line mt-4 space-y-3 border-t pt-4">
               <div>
-                <div className="mb-1.5 flex items-baseline justify-between text-[11px]">
+                <div className="mb-1.5 flex items-baseline justify-between text-2xs">
                   <span className="text-foreground font-medium">Swap</span>
                   <span className="text-mute tabular">
                     {swapPct.toFixed(0)}% · {current.swapUsed.toFixed(0)} of{' '}
@@ -857,7 +857,7 @@ const Overview: React.FC = () => {
                 <Meter value={swapPct} tone={swapTone} label="Swap utilisation" />
               </div>
               <div>
-                <div className="mb-1.5 flex items-baseline justify-between text-[11px]">
+                <div className="mb-1.5 flex items-baseline justify-between text-2xs">
                   <span className="text-foreground font-medium">CPU</span>
                   <span className="text-mute tabular">
                     {current.cpuLoad.toFixed(0)}% · {current.cpuPerCore.length} cores
@@ -873,7 +873,7 @@ const Overview: React.FC = () => {
           <CardHeader>
             <CardTitle>Per-core utilisation</CardTitle>
             {current.cpuPerCore.length > 0 && (
-              <span className="text-mute ml-auto font-mono text-[11px]">
+              <span className="text-mute ml-auto font-mono text-2xs">
                 {current.cpuPerCore.length} cores
               </span>
             )}
@@ -893,7 +893,7 @@ const Overview: React.FC = () => {
             eyebrow="Capacity truth"
             title="Mounted filesystems"
             action={
-              <span className="text-mute font-mono text-[10px]">
+              <span className="text-mute font-mono text-2xs">
                 {current.filesystems.length} mounts
               </span>
             }
@@ -902,8 +902,8 @@ const Overview: React.FC = () => {
             <p className="text-mute mt-5 text-xs">No filesystem capacity reported.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[680px] text-left text-[12px]">
-                <thead className="text-mute font-mono text-[10px] tracking-[0.15em] uppercase">
+              <table className="w-full min-w-[680px] text-left text-2xs">
+                <thead className="text-mute font-mono text-2xs tracking-[0.15em] uppercase">
                   <tr className="border-line border-b">
                     <th className="pb-3 font-medium">Mount</th>
                     <th className="pb-3 font-medium">Device</th>
@@ -920,7 +920,7 @@ const Overview: React.FC = () => {
                         <td className="text-foreground py-3 font-medium">{fs.mountpoint}</td>
                         <td className="text-mute py-3">
                           {fs.device}{' '}
-                          <span className="border-line bg-panel rounded border px-1 py-0.5 text-[10px]">
+                          <span className="border-line bg-panel rounded border px-1 py-0.5 text-2xs">
                             {fs.fstype}
                           </span>
                         </td>

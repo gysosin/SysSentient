@@ -37,7 +37,7 @@ const Row: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = 
   // single unbreakable tokens, so a fixed 170px label column left them nowhere
   // to go and they ran straight off the side of the screen.
   <div className="grid grid-cols-1 gap-1 border-b py-2.5 last:border-0 sm:grid-cols-[170px_1fr] sm:gap-4">
-    <dt className="text-mute pt-0.5 text-[10px] tracking-[0.15em] uppercase">{label}</dt>
+    <dt className="text-mute pt-0.5 text-2xs tracking-[0.15em] uppercase">{label}</dt>
     <dd className="min-w-0 text-sm">
       <span className="tabular block break-all">{value}</span>
       {hint && <p className="text-mute mt-0.5 text-xs">{hint}</p>}
@@ -284,7 +284,7 @@ const Settings: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm">
                 <thead>
-                  <tr className="text-muted-foreground border-b text-[11px] tracking-wide uppercase">
+                  <tr className="text-muted-foreground border-b text-2xs tracking-wide uppercase">
                     <th scope="col" className="px-1 py-2 text-left font-medium">Email</th>
                     <th scope="col" className="px-1 py-2 text-left font-medium">Role</th>
                     <th scope="col" className="px-1 py-2 text-left font-medium">Last sign-in</th>

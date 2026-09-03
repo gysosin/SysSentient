@@ -98,7 +98,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loadin
 
         {error && !loading && (
           <div className="border-crit/40 bg-crit-soft rounded-lg border p-3.5" role="alert">
-            <p className="text-crit mb-1 text-[11px] tracking-wide uppercase">Analysis failed</p>
+            <p className="text-crit mb-1 text-2xs tracking-wide uppercase">Analysis failed</p>
             <p className="text-muted-foreground font-mono text-sm break-words">{error}</p>
           </div>
         )}
@@ -121,13 +121,13 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loadin
                 <h3 className="font-display text-lg font-bold tracking-[0.06em] uppercase">
                   {analysis.status}
                 </h3>
-                <span className="tabular font-mono text-[11px] opacity-70">#{analysisId}</span>
+                <span className="tabular font-mono text-2xs opacity-70">#{analysisId}</span>
               </div>
               <p className="text-foreground text-sm">{analysis.summary}</p>
             </div>
 
             <div className="space-y-2">
-              <h4 className="text-mute border-line border-b pb-1.5 text-[10px] font-semibold tracking-[0.2em] uppercase">
+              <h4 className="text-mute border-line border-b pb-1.5 text-2xs font-semibold tracking-[0.2em] uppercase">
                 Detail
               </h4>
               <p className="text-muted-foreground text-sm leading-relaxed break-words whitespace-pre-wrap">
@@ -137,7 +137,7 @@ const AIInsightPanel: React.FC<AIInsightPanelProps> = ({ analysis, error, loadin
 
             {analysis.recommendedActions.length > 0 && (
               <div className="space-y-3">
-                <h4 className="text-mute border-line border-b pb-1.5 text-[10px] font-semibold tracking-[0.2em] uppercase">
+                <h4 className="text-mute border-line border-b pb-1.5 text-2xs font-semibold tracking-[0.2em] uppercase">
                   Suggested commands
                 </h4>
 

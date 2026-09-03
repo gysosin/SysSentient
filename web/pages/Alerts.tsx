@@ -193,7 +193,7 @@ const Alerts: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="text-mute border-line border-b font-mono text-[10px] tracking-[0.15em] uppercase">
+                <tr className="text-mute border-line border-b font-mono text-2xs tracking-[0.15em] uppercase">
                   <th scope="col" className="px-5 py-2.5 text-left font-medium">Rule</th>
                   <th scope="col" className="px-5 py-2.5 text-left font-medium">Condition</th>
                   <th scope="col" className="px-5 py-2.5 text-left font-medium">For</th>
@@ -245,7 +245,7 @@ const Alerts: React.FC = () => {
               </p>
             </div>
           ) : (
-            <ul className="max-h-[50vh] space-y-0.5 overflow-y-auto font-mono text-[11px]">
+            <ul className="max-h-[50vh] space-y-0.5 overflow-y-auto font-mono text-2xs">
               {history.map((event, idx) => (
                 <li
                   key={`${event.ruleId}-${event.occurredAt}-${idx}`}

@@ -97,9 +97,9 @@ export function ConsoleShortcuts({ openSignal = 0, onToggleFreeze, onToggleTheme
         <dl className="divide-line divide-y">
           {SHORTCUTS.map((shortcut) => (
             <div key={shortcut.keys} className="flex items-center justify-between gap-4 py-2.5">
-              <dt className="text-muted-foreground text-[13px]">{shortcut.action}</dt>
+              <dt className="text-muted-foreground text-xs">{shortcut.action}</dt>
               <dd>
-                <kbd className="border-line bg-panel-strong text-foreground rounded border px-2 py-1 font-mono text-[11px]">
+                <kbd className="border-line bg-panel-strong text-foreground rounded border px-2 py-1 font-mono text-2xs">
                   {shortcut.keys}
                 </kbd>
               </dd>

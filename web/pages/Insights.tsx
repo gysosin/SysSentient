@@ -39,7 +39,7 @@ const Insights: React.FC = () => {
             {/* Stated as a list of facts rather than a paragraph of policy.
                 Anyone deciding whether to enable this feature is auditing it,
                 and an audit is a checklist. */}
-            <ul className="text-muted-foreground mt-5 space-y-4 text-[12px] leading-relaxed">
+            <ul className="text-muted-foreground mt-5 space-y-4 text-2xs leading-relaxed">
               {REDACTED.map((item) => (
                 <li key={item} className="flex gap-3">
                   <Check className="text-ok mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -57,7 +57,7 @@ const Insights: React.FC = () => {
               </p>
             </div>
 
-            <div className="border-line bg-panel-strong text-mute mt-4 rounded-md border p-3 text-[11px] leading-relaxed">
+            <div className="border-line bg-panel-strong text-mute mt-4 rounded-md border p-3 text-2xs leading-relaxed">
               <LockKeyhole className="text-brand mb-2 size-4" aria-hidden="true" />
               Analysis runs against a single current sample plus recent logs. It is triggered
               automatically when CPU or memory crosses a threshold, and manually from this page.

@@ -75,7 +75,7 @@ const Setup: React.FC = () => {
               SysSentient
             </span>
           </div>
-          <p className="text-brand mt-8 text-[10px] font-semibold tracking-[0.22em] uppercase">
+          <p className="text-brand mt-8 text-2xs font-semibold tracking-[0.22em] uppercase">
             First run
           </p>
           <CardTitle className="mt-2 text-4xl tracking-tight">Set up.</CardTitle>

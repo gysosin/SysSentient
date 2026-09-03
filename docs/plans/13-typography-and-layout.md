@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 4 — Console |
 | **Depends on** | 00 |
-| **Status** | not started |
+| **Status** | **done** — 12px floor, fluid layout, guarded by a test |
 
 ## Why
 

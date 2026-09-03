@@ -154,7 +154,7 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
           <span aria-hidden="true" className="size-1.5 rounded-full" style={{ backgroundColor: color }} />
           {title}
         </CardTitle>
-        <span className="text-mute tabular ml-auto font-mono text-[11px]">
+        <span className="text-mute tabular ml-auto font-mono text-2xs">
           {hasData ? `${data.length} samples` : 'no data'}
         </span>
         {/* Revealed on hover, and always reachable by keyboard — a control that
@@ -198,7 +198,7 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
               resolution, not a different view that has to be reconciled with
               the small one. */}
           <div className="h-[55vh] min-h-[320px] w-full">{chartEl}</div>
-          <p className="text-mute font-mono text-[11px]">
+          <p className="text-mute font-mono text-2xs">
             {data.length} samples · {unit.trim() || 'value'} over time
           </p>
         </DialogContent>
