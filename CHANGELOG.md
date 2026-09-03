@@ -113,6 +113,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- Go toolchain raised to 1.25.13. `govulncheck` reported **9 standard-library
+  vulnerabilities reachable from this code** on 1.25.10, including
+  `crypto/x509` certificate verification (reached from `Server.Start`) and
+  `net/http` Punycode handling (reached from the agent's push path). Now zero.
 - Authentication is now required on every `/api/*` and `/ws/*` route. The build
   time dashboard key that Vite inlined into the published bundle, and the
   `?api_key=` WebSocket query parameter, are both gone — see **Removed**.
