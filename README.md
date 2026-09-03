@@ -109,9 +109,10 @@ Adding a machine is two steps. In **Settings → Devices**, name it and press
 *Generate command*; then run what it gives you on that machine:
 
 ```bash
-sys-sentient agent join --server https://monitor.example.com --token <token>
+sys-sentient agent join --server https://monitor.example.com --token <token> --install-service
 ```
 
+That registers a service too, so the machine keeps reporting after a reboot.
 The token is single-use and expires in an hour. It buys a credential belonging
 to that machine alone, which you can revoke on its own without touching the
 rest of the fleet. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

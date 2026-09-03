@@ -9,10 +9,8 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"os/signal"
 	"strings"
 	"sys-sentient/internal/version"
-	"syscall"
 	"time"
 
 	"sys-sentient/internal/agent"
@@ -35,6 +33,13 @@ func main() {
 	if len(os.Args) > 2 && os.Args[1] == "agent" && os.Args[2] == "join" {
 		if err := runJoin(os.Args[3:], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "enrolment failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "service" {
+		if err := runService(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "service command failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
@@ -71,8 +76,11 @@ func main() {
 		"top_processes", cfg.Collector.TopProcesses,
 		"alerting_enabled", cfg.Alerting.Enabled,
 	)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := shutdownContext()
 	defer stop()
+	// Tell the Windows service manager when shutdown actually completes; a
+	// no-op on every other platform.
+	defer serviceShutdownComplete()
 
 	if cfg.Mode == config.ModeAgent {
 		runAgent(ctx, cfg, logger, build)
