@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 3 — Fleet |
 | **Depends on** | 10, 11 |
-| **Status** | not started |
+| **Status** | **done** — Settings → Devices enrols, lists and revokes |
 
 ## Why
 

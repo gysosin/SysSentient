@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -29,6 +30,16 @@ import (
 )
 
 func main() {
+	// Subcommands are dispatched before flag parsing, so `agent join` can own
+	// its own flag set rather than sharing the daemon's.
+	if len(os.Args) > 2 && os.Args[1] == "agent" && os.Args[2] == "join" {
+		if err := runJoin(os.Args[3:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "enrolment failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// A monitoring agent with no --version cannot be audited across a fleet.
 	showVersion := flag.Bool("version", false, "print version and exit")
 	configPath := flag.String("config", "", "path to config file (default: ./config.yaml or /etc/sys-sentient)")
@@ -504,7 +515,16 @@ func runAgent(ctx context.Context, cfg *config.Config, logger *slog.Logger, buil
 			if err := client.Flush(ctx); err != nil {
 				// Expected during an outage: the spool retains the samples and
 				// the next tick retries.
-				logger.Warn("push failed, samples remain spooled", "pending", client.Pending(), "error", err)
+				switch {
+				case errors.Is(err, agent.ErrCredentialRevoked):
+					logger.Error("this agent has been revoked; it will keep collecting but the server will not accept its data. Re-enrol with `sys-sentient agent join` using a new token.",
+						"server", cfg.Agent.ServerURL, "pending", client.Pending())
+				case errors.Is(err, agent.ErrCredentialRejected):
+					logger.Error("the server does not recognise this agent's credential. Check agent.key, or re-enrol with `sys-sentient agent join`.",
+						"server", cfg.Agent.ServerURL, "pending", client.Pending())
+				default:
+					logger.Warn("push failed, samples remain spooled", "pending", client.Pending(), "error", err)
+				}
 			}
 		}
 	}

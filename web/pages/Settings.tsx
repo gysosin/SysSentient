@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   KeyRound,
+  MonitorSmartphone,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -30,8 +31,9 @@ import { Label } from '../components/ui/label';
 import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { RuntimeSettingsForm } from './settings/RuntimeSettingsForm';
+import { DevicesPanel } from './settings/DevicesPanel';
 
-type SectionID = 'status' | 'configuration' | 'privacy' | 'users' | 'account';
+type SectionID = 'status' | 'configuration' | 'privacy' | 'devices' | 'users' | 'account';
 
 /** The sections, in the order an operator is likely to want them. */
 const SECTIONS: {
@@ -43,6 +45,7 @@ const SECTIONS: {
   { id: 'status', label: 'Status', icon: Server },
   { id: 'configuration', label: 'Configuration', icon: SlidersHorizontal },
   { id: 'privacy', label: 'Privacy & integrations', icon: ShieldCheck },
+  { id: 'devices', label: 'Devices', icon: MonitorSmartphone },
   // Viewers must not see user management at all, rather than seeing it
   // disabled: the server enforces this, and a visible-but-dead control just
   // invites a support question.
@@ -335,6 +338,10 @@ const Settings: React.FC = () => {
               </dl>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="devices">
+          <DevicesPanel isAdmin={isAdmin} />
         </TabsContent>
 
         <TabsContent value="users">

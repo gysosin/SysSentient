@@ -24,17 +24,69 @@ to `/api/ingest`.
 
 ### Agent
 
+Enrol the machine rather than hand-writing its config. On the server, open
+**Settings → Devices**, name the machine, and press *Generate command*. Run the
+command it gives you on the machine itself:
+
+```bash
+sys-sentient agent join --server https://monitor.example.com --token <token>
+```
+
+That exchanges the single-use token for a credential belonging to this machine
+alone, writes `agent.yaml` with mode `0600`, and prints how to start it. The
+device appears on the Devices screen once it reports.
+
+Useful flags:
+
+| Flag | Purpose |
+|---|---|
+| `--config <path>` | Where to write the config. Defaults to `/etc/sys-sentient/agent.yaml` as root, otherwise the user config directory. |
+| `--ca-cert <path>` | Trust a private CA for the server connection. |
+| `--insecure-skip-verify` | Disable TLS verification. Last resort; it makes the connection trivially interceptable. |
+| `--force` | Overwrite an existing config. Refused by default, so re-running the command cannot silently orphan a working credential. |
+
+Join tokens are single use and expire after an hour by default (24 hours is the
+maximum). Only the hash is stored, so the token is shown once at creation and
+cannot be retrieved afterwards — generate a new one instead.
+
+The written config looks like this:
+
 ```yaml
 mode: agent
 agent:
   server_url: "https://monitor.example.com"
-  key: "<the same agent_key>"
-  spool_path: /var/lib/sys-sentient/spool
-  batch_size: 60
+  key: "<this machine's own credential>"
+  spool_path: /var/lib/sys-sentient/spool.jsonl
 ```
 
 An agent opens no database and serves no dashboard. It collects on the poll
 interval, batches, and pushes.
+
+### Removing a machine
+
+Press **Revoke** on the Devices screen. The credential stops working
+immediately; the row stays, marked revoked, so a machine that disappears from
+the fleet has a visible reason rather than looking like a bug.
+
+A revoked agent keeps collecting locally and says so plainly in its log:
+
+```
+ERROR this agent has been revoked; it will keep collecting but the server will
+not accept its data. Re-enrol with `sys-sentient agent join` using a new token.
+```
+
+To bring it back, generate a new token and re-run `agent join --force`.
+
+### Writing config by hand
+
+Still supported, and `server.agent_key` still authenticates agents that use it
+— an existing fleet keeps working across the upgrade that introduced per-agent
+credentials, and can migrate one machine at a time. Per-agent credentials are
+tried first, the shared key second.
+
+Set `server.public_url` if the server sits behind a reverse proxy; without it
+the enrolment command is built from the request's `Host`, which is the proxy's
+own name.
 
 ### Surviving a network partition
 
@@ -53,14 +105,16 @@ warns loudly; it defeats the point of using HTTPS at all.
 
 ## Current limits
 
-There is **one shared agent key for the whole fleet**. It cannot be rotated per
-agent, and a host is registered on first contact with no approval step, so
-anyone holding the key can register any host id.
+A host is registered on first contact with no approval step. A join token is
+therefore worth protecting for its lifetime: anyone holding one can enrol a
+machine and report under any host id. They are single-use and short-lived to
+keep that window small.
 
-Per-agent credentials, join tokens, revocation, and enrolling a machine from
-the dashboard are the next work — see
-[plans/10-agent-join-tokens.md](plans/10-agent-join-tokens.md) through
-[plans/12-devices-screen.md](plans/12-devices-screen.md).
+`server.agent_key`, if set, remains a shared fleet-wide secret with no
+per-agent rotation or revocation. Prefer enrolment; keep the shared key only
+for machines not yet migrated, and give it the handling you would give a
+database password.
 
-Until then, treat `agent_key` as a shared secret: give it the handling you
-would give a database password, and put the server behind TLS.
+Put the server behind TLS either way. Over plain HTTP the join token and the
+credential it returns both cross the network in the clear — `agent join` warns
+when you do this, but it cannot make it safe.
