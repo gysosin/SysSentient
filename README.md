@@ -134,9 +134,14 @@ sudo systemctl daemon-reload && sudo systemctl enable --now sys-sentient
 
 ## Platform support
 
-Linux only in practice. Metric collection is cross-platform via gopsutil, but
-log collection (`journalctl`, `dmesg`, `/var/log/syslog`), the systemd unit and
-the container image are all Linux-specific.
+The daemon now **builds for linux, windows and darwin on amd64 and arm64**, as
+a static binary with no C toolchain required — the SQLite driver is pure Go.
+
+Linux remains the only fully supported target at runtime: log collection
+(`journalctl`, `dmesg`, `/var/log/syslog`), the systemd unit and the container
+image are Linux-specific, and metric collection is cross-platform via gopsutil.
+Windows and macOS log sources and service integration are tracked in
+[docs/plans/03-platform-seams.md](docs/plans/03-platform-seams.md).
 
 ## Development
 

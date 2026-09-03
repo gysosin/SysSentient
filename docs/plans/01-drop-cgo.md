@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 1 — Packaging |
 | **Depends on** | 00 |
-| **Status** | not started |
+| **Status** | **done** — merged, all six targets build |
 
 ## Why
 

@@ -8,15 +8,23 @@ import (
 
 	"sys-sentient/internal/models"
 
-	_ "github.com/mattn/go-sqlite3"
+	// Pure Go. The cgo driver made CGO_ENABLED=0 impossible, which meant no
+	// static binary and no Windows/macOS/arm64 build without a C toolchain per
+	// target — the blocker on shipping an installable package at all.
+	_ "modernc.org/sqlite"
 )
+
+// driverName is the database/sql name registered by modernc.org/sqlite. The
+// cgo driver registered "sqlite3"; keeping this in one place stops the two
+// from drifting apart in tests, which is exactly how the swap first broke.
+const driverName = "sqlite"
 
 type Store struct {
 	db *sql.DB
 }
 
 func NewStore(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite3", sqliteDSN(dbPath))
+	db, err := sql.Open(driverName, sqliteDSN(dbPath))
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +62,15 @@ func NewStore(dbPath string) (*Store, error) {
 }
 
 func sqliteDSN(dbPath string) string {
-	return dbPath + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_foreign_keys=ON"
+	// modernc.org/sqlite takes pragmas as `_pragma=name(value)`; the cgo driver
+	// used `_journal_mode=WAL` style keys. Silently different: unknown query
+	// parameters are ignored rather than rejected, so getting this wrong loses
+	// WAL and the busy timeout without any error at open time.
+	return dbPath +
+		"?_pragma=journal_mode(WAL)" +
+		"&_pragma=busy_timeout(5000)" +
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=foreign_keys(ON)"
 }
 
 func createTable(db *sql.DB) error {

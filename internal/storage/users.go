@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 var (
@@ -72,11 +73,21 @@ func (s *Store) CreateUser(u UserRecord) error {
 		INSERT INTO users (id, email, password_hash, role, created_at, last_login_at)
 		VALUES (?, ?, ?, ?, ?, NULL)`,
 		u.ID, u.Email, u.PasswordHash, u.Role, u.CreatedAt.UTC())
-	var sqliteErr sqlite3.Error
-	if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+	if isUniqueViolation(err) {
 		return ErrDuplicateEmail
 	}
 	return err
+}
+
+// isUniqueViolation reports whether err is SQLite's UNIQUE constraint failure.
+//
+// Kept as one function so the driver detail lives in a single place: the cgo
+// driver reported this as sqlite3.Error.ExtendedCode, the pure-Go one as
+// *sqlite.Error.Code(). A registration racing another on the same address is a
+// duplicate, not a server error, and callers need to tell those apart.
+func isUniqueViolation(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 
 const userColumns = `id, email, password_hash, role, created_at, last_login_at`

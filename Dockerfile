@@ -24,10 +24,11 @@ RUN go mod download
 
 COPY . .
 COPY --from=web-builder /src/web/dist ./web/dist
-# CGO is required by mattn/go-sqlite3, which is why there is no arm64 image
-# yet: cross-compiling would need a full C toolchain. Switching to
-# modernc.org/sqlite would allow CGO_ENABLED=0 and a plain GOARCH matrix.
-RUN CGO_ENABLED=1 GOOS=linux go build -trimpath \
+# CGO_ENABLED=0 since the SQLite driver became pure Go. The binary is now
+# static, so a plain GOOS/GOARCH matrix works and the runtime stage no longer
+# needs glibc. Moving to a distroless or scratch base is tracked in
+# docs/plans/04-goreleaser-packaging.md along with the multi-arch image.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -ldflags="-s -w \
       -X sys-sentient/internal/version.Version=${VERSION} \
       -X sys-sentient/internal/version.Commit=${COMMIT}" \

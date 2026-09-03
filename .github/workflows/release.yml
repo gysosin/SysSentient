@@ -36,10 +36,10 @@ jobs:
         working-directory: web
         run: npm ci && npm run build
 
-      # NOTE: only linux/amd64 for now. The SQLite driver is cgo-based
-      # (mattn/go-sqlite3), so cross-compiling to arm64 needs a full C
-      # toolchain. Switching to modernc.org/sqlite would allow CGO_ENABLED=0
-      # and a plain GOOS/GOARCH matrix — tracked as a follow-up.
+      # Still linux/amd64 only, but no longer for a technical reason: the
+      # driver is pure Go now and CGO_ENABLED=0 cross-compiles to all six
+      # OS/arch combinations. Expanding this into a matrix, with .deb/.rpm and
+      # a Windows service, is docs/plans/04-goreleaser-packaging.md.
       - name: Build binary
         run: |
           set -euo pipefail
@@ -47,7 +47,7 @@ jobs:
           COMMIT="$(git rev-parse --short HEAD)"
           DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           mkdir -p dist
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -trimpath \
             -ldflags "-s -w \
               -X sys-sentient/internal/version.Version=${VERSION} \
