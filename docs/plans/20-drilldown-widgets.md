@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 4 — Console |
 | **Depends on** | 06, 13 |
-| **Status** | not started |
+| **Status** | **done** — all eight tiles open an analysis view |
 
 ## Why
 

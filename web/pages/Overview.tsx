@@ -16,6 +16,7 @@ import {
 
 import { useDashboard } from '../hooks/useDashboardData';
 import SystemChart from '../components/SystemChart';
+import { MetricDrilldown, MetricKey } from '../components/MetricDrilldown';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -122,6 +123,8 @@ interface StatProps {
   /** Categorical colour for metrics that have no severity — throughput has no
    *  "bad" value, so tinting it by threshold would invent a judgement. */
   seriesColor?: string;
+  /** Opens the drill-down. A tile answers "how much"; that answers "where". */
+  onOpen?: () => void;
 }
 
 function Stat({
@@ -137,6 +140,7 @@ function Stat({
   loading,
   fill,
   seriesColor,
+  onOpen,
 }: StatProps) {
   const strokeFor: Record<Tone, string> = {
     ok: 'var(--ok)',
@@ -147,8 +151,20 @@ function Stat({
     neutral: 'var(--chart-2)',
   };
 
+  // A button rather than a click handler on a div: the tiles have to be
+  // reachable and operable from the keyboard, and a div with onClick is
+  // neither. The whole tile is the target, because a small affordance in the
+  // corner is a worse target than the 150px card already on screen.
+  const Wrapper = onOpen ? 'button' : 'div';
+
   return (
-    <Card className={cn('h-full transition-colors', RING_TONE[tone])}>
+    <Card className={cn('h-full transition-colors', RING_TONE[tone], onOpen && 'hover:border-brand/50')}>
+      <Wrapper
+        type={onOpen ? 'button' : undefined}
+        onClick={onOpen}
+        aria-label={onOpen ? `${label} details` : undefined}
+        className={cn('block w-full text-left', onOpen && 'cursor-pointer')}
+      >
       <CardContent className="px-3.5 pt-3.5 pb-4">
         <div className="flex items-center gap-1.5">
           <Icon className="text-melt size-3.5 shrink-0" aria-hidden="true" />
@@ -207,6 +223,7 @@ function Stat({
           </Badge>
         )}
       </CardContent>
+      </Wrapper>
     </Card>
   );
 }
@@ -307,6 +324,7 @@ const seriesOf = (history: SystemMetrics[], key: keyof SystemMetrics): number[] 
 const Overview: React.FC = () => {
   const { current, metricsHistory, hasData, feed, processes, logs, hosts, firingAlerts, ai } =
     useDashboard();
+  const [drilldown, setDrilldown] = React.useState<MetricKey | null>(null);
   const loading = !hasData;
   const stale = feed.level === 'stale' || feed.level === 'down';
 
@@ -486,6 +504,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="CPU"
+            onOpen={() => setDrilldown('cpu')}
             icon={Cpu}
             value={current.cpuLoad}
             decimals={1}
@@ -500,6 +519,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Memory"
+            onOpen={() => setDrilldown('memory')}
             icon={MemoryStick}
             value={memPct}
             suffix="%"
@@ -513,6 +533,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Swap"
+            onOpen={() => setDrilldown('swap')}
             icon={Waves}
             value={swapPct}
             suffix="%"
@@ -526,6 +547,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Load average"
+            onOpen={() => setDrilldown('load')}
             icon={Gauge}
             value={current.loadAvg1}
             decimals={2}
@@ -539,6 +561,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Disk I/O"
+            onOpen={() => setDrilldown('diskio')}
             icon={HardDrive}
             value={current.diskIOPS}
             suffix=" iops"
@@ -551,6 +574,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Network"
+            onOpen={() => setDrilldown('network')}
             icon={Network}
             value={current.networkRx + current.networkTx}
             suffix=" KB/s"
@@ -562,6 +586,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Temperature"
+            onOpen={() => setDrilldown('temperature')}
             icon={Thermometer}
             value={current.temperature}
             display={current.temperature > 0 ? undefined : 'n/a'}
@@ -575,6 +600,7 @@ const Overview: React.FC = () => {
         <StaggerItem>
           <Stat
             label="Disk usage"
+            onOpen={() => setDrilldown('disk')}
             icon={Timer}
             value={fullestDisk ? fullestDisk.usedPercent : 0}
             suffix="%"
@@ -968,6 +994,14 @@ const Overview: React.FC = () => {
         <SystemChart title="Disk write" data={metricsHistory} dataKey="diskWrite" color="var(--chart-3)" unit=" MB/s" />
         <SystemChart title="Network TX" data={metricsHistory} dataKey="networkTx" color="var(--chart-5)" unit=" KB/s" />
       </div>
+
+      <MetricDrilldown
+        metric={drilldown}
+        onClose={() => setDrilldown(null)}
+        current={current}
+        history={metricsHistory}
+        processes={processes}
+      />
     </div>
   );
 };
