@@ -2,7 +2,6 @@ package logs
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -69,22 +68,27 @@ func TestGetTailLines(t *testing.T) {
 
 func TestGetLogsWithTimeout(t *testing.T) {
 	reader := NewLogReader(10)
-	reader.runCommand = func(_ context.Context, name string, _ ...string) ([]byte, error) {
-		if name == "journalctl" {
-			return []byte("May 09 warning: synthetic journal entry\n"), nil
-		}
-		return nil, errors.New("source unavailable")
+	// Answer whatever this platform asks for. The test used to key off
+	// "journalctl" and assert the "SYSTEMD JOURNAL" heading, which made it a
+	// Linux-only test that failed the moment Windows and macOS gained their
+	// own sources — a test bug, not a product one.
+	reader.runCommand = func(context.Context, string, ...string) ([]byte, error) {
+		return []byte("synthetic warning: something happened\n"), nil
 	}
 
-	// This should complete quickly
 	logs, err := reader.GetLogsWithTimeout(2 * time.Second)
 
-	// We don't expect timeout error in normal conditions
 	if err != nil && strings.Contains(err.Error(), "timed out") {
 		t.Error("Log collection should not timeout in normal conditions")
 	}
-	if !strings.Contains(logs, "SYSTEMD JOURNAL") {
-		t.Fatalf("Expected journal logs, got %q", logs)
+	// Assert against this platform's own first source rather than a hard-coded
+	// heading, so the check stays meaningful everywhere.
+	wantHeading := platformLogSources[0].heading
+	if !strings.Contains(logs, wantHeading) {
+		t.Fatalf("expected the %q block, got %q", wantHeading, logs)
+	}
+	if !strings.Contains(logs, "something happened") {
+		t.Fatalf("collected output lost the source content: %q", logs)
 	}
 }
 

@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Cross-platform packages.** A release now produces static binaries for
+  linux, windows and darwin on amd64 and arm64, plus `.deb`, `.rpm` and `.apk`
+  with a service account, systemd unit and a `noreplace` config, and a
+  multi-arch container image. Previously a release produced exactly one
+  artifact — a linux/amd64 tarball — because the cgo SQLite driver made
+  anything else impossible.
+- CI now builds and vets on Windows and macOS runners. Those targets had never
+  been compiled, so a break in their platform-specific code could only have
+  been found by a user on that platform.
+
 - **Apache-2.0 licence**, with `NOTICE` and `docs/THIRD_PARTY.md`. The project
   was previously "all rights reserved" by default, which meant nobody could
   legally redistribute or run it — a hard blocker on shipping packages at all.

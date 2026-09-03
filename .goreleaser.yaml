@@ -1,0 +1,140 @@
+# GoReleaser configuration.
+#
+# Replaces a hand-rolled release job that produced exactly one artifact — a
+# linux/amd64 tarball — because the cgo SQLite driver made anything else
+# impossible. The driver is pure Go now (docs/plans/01-drop-cgo.md) and the
+# dashboard is embedded in the binary (02-embed-dashboard.md), so a single
+# static binary per OS/arch is genuinely self-contained.
+#
+# Validate locally without tagging:
+#     goreleaser check
+#     goreleaser release --snapshot --clean
+version: 2
+
+project_name: sys-sentient
+
+before:
+  hooks:
+    # The dashboard is embedded at compile time, so it must exist before the Go
+    # build runs. Without this the binary would ship the .gitkeep placeholder
+    # and serve a 404 at / — silently, since the embed still compiles.
+    - sh -c "cd web && npm ci && npm run build"
+    - go mod tidy
+
+builds:
+  - id: sys-daemon
+    main: ./cmd/daemon
+    binary: sys-daemon
+    env:
+      # Pure Go all the way down; this is what makes the matrix below possible.
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X sys-sentient/internal/version.Version={{.Version}}
+      - -X sys-sentient/internal/version.Commit={{.ShortCommit}}
+      - -X sys-sentient/internal/version.BuildDate={{.Date}}
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: default
+    ids: [sys-daemon]
+    # zip on Windows, tar.gz elsewhere: shipping a .tar.gz to Windows users
+    # means telling them to install something to open it.
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - CHANGELOG.md
+      - LICENSE
+      - NOTICE
+      - SECURITY.md
+      - config.yaml.example
+      - src: sys-sentient.service
+        info:
+          # Only meaningful on Linux, but harmless elsewhere and cheaper than
+          # maintaining a second archive definition.
+          mode: 0644
+
+nfpms:
+  - id: packages
+    ids: [sys-daemon]
+    package_name: sys-sentient
+    vendor: SysSentient
+    homepage: https://github.com/gysosin/SysSentient
+    maintainer: Abhishek Thakur <gysosin@gmail.com>
+    description: |-
+      Self-hosted system monitor with alerting, a live dashboard and
+      AI-assisted analysis.
+    license: Apache-2.0
+    formats: [deb, rpm, apk]
+    bindir: /usr/bin
+    contents:
+      - src: sys-sentient.service
+        dst: /lib/systemd/system/sys-sentient.service
+        type: config
+      - src: config.yaml.example
+        dst: /etc/sys-sentient/config.yaml.example
+      # Marked noreplace so an upgrade never overwrites an operator's edited
+      # configuration — the single most annoying thing a package can do.
+      - src: config.yaml.example
+        dst: /etc/sys-sentient/config.yaml
+        type: "config|noreplace"
+      - src: LICENSE
+        dst: /usr/share/doc/sys-sentient/LICENSE
+      - src: NOTICE
+        dst: /usr/share/doc/sys-sentient/NOTICE
+    scripts:
+      preinstall: packaging/preinstall.sh
+      postinstall: packaging/postinstall.sh
+      preremove: packaging/preremove.sh
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  # Generated from the conventional commits the repo already uses.
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: Security
+      regexp: '^sec(\(.+\))?!?:'
+      order: 2
+    - title: Other
+      order: 99
+  filters:
+    exclude:
+      - '^docs(\(.+\))?:'
+      - '^test(\(.+\))?:'
+      - '^chore(\(.+\))?:'
+      - '^ci(\(.+\))?:'
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Install
+
+    **Debian/Ubuntu** — `sudo dpkg -i sys-sentient_{{ .Version }}_linux_amd64.deb`
+    **Fedora/RHEL** — `sudo rpm -i sys-sentient_{{ .Version }}_linux_amd64.rpm`
+    **Alpine** — `sudo apk add --allow-untrusted sys-sentient_{{ .Version }}_linux_amd64.apk`
+    **Windows / macOS** — download the archive below and run `sys-daemon`.
+
+    The dashboard is embedded in the binary, so it serves from any directory.
+
+    Verify downloads against `checksums.txt`.

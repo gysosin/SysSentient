@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 1 — Packaging |
 | **Depends on** | 01, 02, 03 |
-| **Status** | not started |
+| **Status** | **done** — 12 artifacts, verified end to end |
 
 ## Why
 
