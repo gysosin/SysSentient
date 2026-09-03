@@ -105,6 +105,30 @@ Rules are currently built in; editing them from the browser is not implemented y
 | `GET /api/alerts/history` | key | Recent transitions |
 | `POST /api/alerts/{ruleID}/acknowledge` | key | Silence an active alert |
 | `GET /ws/metrics` | key | Live metric stream |
+| `GET /api/export` | key | Retained history as CSV or JSON (rate limited) |
+
+## Backup
+
+Do not copy the database file while the daemon is running. SQLite keeps the
+database and its write-ahead log as two files that must agree, and a copy taken
+between them is corrupt — silently, until you try to restore it.
+
+```bash
+sys-daemon --backup /var/backups/sys-sentient-$(date +%F).db
+```
+
+That works against a running daemon, writes a self-contained file needing no
+`-wal` alongside it, restricts it to `0600` because it contains password hashes
+and session tokens, and verifies it with `PRAGMA integrity_check` before
+reporting success.
+
+History is also exportable:
+
+```bash
+curl -o metrics.csv 'http://localhost:8080/api/export?format=csv&resolution=1m&since=2026-01-01T00:00:00Z'
+```
+
+`resolution` selects the tier: `raw`, `1m` or `5m`.
 
 ## Privacy
 

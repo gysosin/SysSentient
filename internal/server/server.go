@@ -135,6 +135,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/insights", s.requireAuth(s.handleInsights))
 	mux.HandleFunc("GET /api/logs", s.requireAuth(rateLimit(s.logsLimiter, "2", s.handleLogs)))
 	mux.HandleFunc("GET /api/hosts", s.requireAuth(s.handleHosts))
+	// Export can stream tens of thousands of rows out of the same database the
+	// collector is writing to, so it is rate limited like the other expensive
+	// reads rather than left open.
+	mux.HandleFunc("GET /api/export", s.requireAuth(rateLimit(s.logsLimiter, "2", s.handleExport)))
 	mux.HandleFunc("GET /api/alerts", s.requireAuth(s.handleAlerts))
 	mux.HandleFunc("GET /api/alerts/rules", s.requireAuth(s.handleAlertRules))
 	mux.HandleFunc("GET /api/alerts/history", s.requireAuth(s.handleAlertHistory))

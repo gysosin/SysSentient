@@ -32,6 +32,7 @@ func main() {
 	// A monitoring agent with no --version cannot be audited across a fleet.
 	showVersion := flag.Bool("version", false, "print version and exit")
 	configPath := flag.String("config", "", "path to config file (default: ./config.yaml or /etc/sys-sentient)")
+	backupTo := flag.String("backup", "", "write a consistent copy of the database to this path and exit")
 	flag.Parse()
 
 	if *showVersion {
@@ -68,6 +69,18 @@ func main() {
 	}
 
 	// 2. Initialize Storage
+	// `--backup` is a one-shot operation, not a mode: open the database, copy
+	// it, exit. Deliberately available while another daemon is running against
+	// the same file — that is the case it exists for, and VACUUM INTO is safe
+	// there whereas copying the file is not.
+	if *backupTo != "" {
+		if err := runBackup(cfg.Database.Path, *backupTo); err != nil {
+			logger.Error("backup failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	store, err := storage.NewStore(cfg.Database.Path)
 	if err != nil {
 		logger.Error("failed to initialize storage", "error", err)
@@ -511,4 +524,38 @@ func bootstrapSetup(store *storage.Store, cfg *config.Config, logger *slog.Logge
 		"token", token.String(),
 	)
 	return token
+}
+
+// runBackup writes a consistent copy of the database and verifies it.
+//
+// Verification is not optional here: a corrupt SQLite file opens and answers
+// simple queries perfectly well, so a backup that is never checked is a backup
+// nobody knows is broken until they need it.
+func runBackup(dbPath, destPath string) error {
+	store, err := storage.NewStore(dbPath)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	if err := store.Backup(destPath); err != nil {
+		return err
+	}
+
+	verify, err := storage.NewStore(destPath)
+	if err != nil {
+		return fmt.Errorf("reopen backup: %w", err)
+	}
+	defer func() { _ = verify.Close() }()
+
+	result, err := verify.IntegrityCheck()
+	if err != nil {
+		return err
+	}
+	if result != "ok" {
+		return fmt.Errorf("backup failed its integrity check: %s", result)
+	}
+
+	fmt.Printf("backup written to %s (integrity check: %s)\n", destPath, result)
+	return nil
 }
