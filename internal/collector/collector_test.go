@@ -219,16 +219,20 @@ func TestProcessCPUPercentFirstSampleIsZero(t *testing.T) {
 }
 
 // systemRoot is the mountpoint the OS reports for the volume this test runs
-// from: "/" on unix, "C:\\" or similar on Windows.
+// from: "/" on unix, "C:" or "D:" on Windows.
+//
+// Note there is no trailing separator on Windows. gopsutil reports partitions
+// as "C:" and "D:", not "C:\\" — which cost a CI round-trip to discover, and
+// is why the assertion below prints the mountpoints it actually saw.
 func systemRoot() string {
 	if runtime.GOOS != "windows" {
 		return "/"
 	}
 	wd, err := os.Getwd()
 	if err != nil {
-		return "C:\\"
+		return "C:"
 	}
-	return filepath.VolumeName(wd) + "\\"
+	return filepath.VolumeName(wd)
 }
 
 // mountpoints makes a failure message useful rather than just a count.
