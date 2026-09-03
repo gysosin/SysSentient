@@ -259,6 +259,41 @@ describe('navigation reaches every section', () => {
   });
 });
 
+describe('Settings sections', () => {
+  // The account menu links to /settings#account. When Settings became tabbed
+  // that link had to keep working, or the only route to the change-password
+  // form would have silently become a dead end.
+  test('the account deep link opens the Account section', async () => {
+    goTo('/settings#account');
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const active = document.querySelector('[data-slot="tabs-trigger"][data-state="active"]');
+      assert.ok(active, 'no active settings tab');
+      assert.match(active.textContent ?? '', /Account/);
+    });
+  });
+
+  test('an unknown hash falls back to the first section rather than a blank page', async () => {
+    goTo('/settings#nonsense');
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const active = document.querySelector('[data-slot="tabs-trigger"][data-state="active"]');
+      assert.ok(active, 'no active settings tab');
+      assert.match(active.textContent ?? '', /Status/);
+    });
+  });
+});
+
 describe('Processes page', () => {
   test('renders live process rows from the socket, with state', async () => {
     goTo('/processes');
