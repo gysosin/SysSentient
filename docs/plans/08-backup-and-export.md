@@ -12,6 +12,11 @@ There is no documented way to back up or move the data. Copying a live WAL
 database with `cp` produces a corrupt file, which is the mistake people make by
 default.
 
+> **Prior art:** four deleted `feature/export-*` branches implemented CSV
+> and JSON export for metrics, logs and insights against the old console.
+> See [21](21-harvest-from-stale-branches.md) — the shapes are worth
+> reading before designing this.
+
 ## Scope
 
 - A `sys-sentient backup` command using SQLite's online backup API.

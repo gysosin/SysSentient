@@ -13,6 +13,11 @@ enlarges the same series; it does not answer "what is happening, and where".
 Tiered retention (shard 06) is a prerequisite for a useful time-range selector
 inside the drill-down.
 
+> **Prior art:** `feature/metric-time-range-switcher` built the range
+> selector this shard needs, and `feature/log-severity-explorer` /
+> `log-facility-breakdown` built a Logs drill-down, both against the old
+> console. See [21](21-harvest-from-stale-branches.md).
+
 ## Scope
 
 Clicking any tile opens a full analysis view:
