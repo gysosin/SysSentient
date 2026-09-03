@@ -3,7 +3,6 @@ package logs
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -45,31 +44,33 @@ func (r *LogReader) GetRecentLogs() (string, error) {
 	return r.GetRecentLogsContext(context.Background())
 }
 
-// GetRecentLogsContext collects recent logs from multiple sources.
+// logSource is one place this platform keeps system logs. Each platform file
+// supplies its own list; everything downstream — filtering, truncation, the
+// PII scrubber, the AI prompt — is shared.
+type logSource struct {
+	// heading labels the block in the combined output.
+	heading string
+	fetch   func(r *LogReader, ctx context.Context) (string, error)
+}
+
+// GetRecentLogsContext collects recent logs from every source this platform
+// offers.
+//
+// Sources fail soft on purpose: journalctl may be absent, dmesg needs
+// privileges the hardened systemd unit deliberately drops, and the Windows
+// event log may be unreadable for the service account. One unavailable source
+// must not cost the others, and no source at all is a valid answer rather than
+// an error — a machine with nothing to report is the common case.
 func (r *LogReader) GetRecentLogsContext(ctx context.Context) (string, error) {
 	var allLogs strings.Builder
 
-	// 1. Get journalctl errors (systemd journal)
-	journalLogs, err := r.getJournalErrors(ctx)
-	if err == nil && journalLogs != "" {
-		allLogs.WriteString("=== SYSTEMD JOURNAL (Errors/Warnings) ===\n")
-		allLogs.WriteString(journalLogs)
-		allLogs.WriteString("\n")
-	}
-
-	// 2. Get dmesg errors (kernel ring buffer)
-	dmesgLogs, err := r.getDmesgErrors(ctx)
-	if err == nil && dmesgLogs != "" {
-		allLogs.WriteString("=== KERNEL MESSAGES (Errors/Warnings) ===\n")
-		allLogs.WriteString(dmesgLogs)
-		allLogs.WriteString("\n")
-	}
-
-	// 3. Get syslog errors if available
-	syslogLogs, err := r.getSyslogErrors(ctx)
-	if err == nil && syslogLogs != "" {
-		allLogs.WriteString("=== SYSLOG (Recent Errors) ===\n")
-		allLogs.WriteString(syslogLogs)
+	for _, src := range platformLogSources {
+		out, err := src.fetch(r, ctx)
+		if err != nil || out == "" {
+			continue
+		}
+		allLogs.WriteString("=== " + src.heading + " ===\n")
+		allLogs.WriteString(out)
 		allLogs.WriteString("\n")
 	}
 
@@ -79,43 +80,6 @@ func (r *LogReader) GetRecentLogsContext(ctx context.Context) (string, error) {
 	}
 
 	return result, nil
-}
-
-// getJournalErrors gets recent error/warning entries from journalctl
-func (r *LogReader) getJournalErrors(ctx context.Context) (string, error) {
-	// Get logs from last 10 minutes with priority error or warning
-	output, err := r.runLogCommand(ctx, "journalctl", "--since", "10 minutes ago", "-p", "warning", "--no-pager", "-n", fmt.Sprintf("%d", r.maxLines))
-	if err != nil {
-		// journalctl might not be available or user lacks permissions
-		return "", fmt.Errorf("journalctl failed: %w", err)
-	}
-
-	return r.filterRelevantLines(string(output)), nil
-}
-
-// getDmesgErrors gets recent kernel errors from dmesg
-func (r *LogReader) getDmesgErrors(ctx context.Context) (string, error) {
-	output, err := r.runLogCommand(ctx, "dmesg", "-l", "err,warn", "-T")
-	if err != nil {
-		// dmesg might require root or not available
-		return "", fmt.Errorf("dmesg failed: %w", err)
-	}
-
-	lines := r.getTailLines(string(output), r.maxLines)
-	return r.filterRelevantLines(lines), nil
-}
-
-// getSyslogErrors reads recent errors from /var/log/syslog
-func (r *LogReader) getSyslogErrors(ctx context.Context) (string, error) {
-	// Try to read syslog with tail
-	output, err := r.runLogCommand(ctx, "tail", "-n", fmt.Sprintf("%d", r.maxLines), "/var/log/syslog")
-	if err != nil {
-		// syslog might not exist or permission denied
-		return "", fmt.Errorf("syslog read failed: %w", err)
-	}
-
-	// Filter for error/warning keywords
-	return r.filterErrorLines(string(output)), nil
 }
 
 // filterRelevantLines removes empty lines and truncates

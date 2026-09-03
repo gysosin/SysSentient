@@ -136,11 +136,19 @@ sudo systemctl daemon-reload && sudo systemctl enable --now sys-sentient
 The daemon now **builds for linux, windows and darwin on amd64 and arm64**, as
 a static binary with no C toolchain required — the SQLite driver is pure Go.
 
-Linux remains the only fully supported target at runtime: log collection
-(`journalctl`, `dmesg`, `/var/log/syslog`), the systemd unit and the container
-image are Linux-specific, and metric collection is cross-platform via gopsutil.
-Windows and macOS log sources and service integration are tracked in
-[docs/plans/03-platform-seams.md](docs/plans/03-platform-seams.md).
+Metric collection is cross-platform via gopsutil. Log collection and machine
+identity now have per-platform implementations:
+
+| | Logs | Machine identity |
+|---|---|---|
+| Linux | journalctl, dmesg, `/var/log/syslog` | `/etc/machine-id` |
+| Windows | System and Application event logs (`wevtutil`) | registry `MachineGuid` |
+| macOS | unified log (`log show`) | `IOPlatformUUID` |
+
+Every source fails soft, so a missing or unreadable one costs the others
+nothing. Service integration is still Linux-only — the systemd unit ships, and
+a Windows service and macOS launchd plist are tracked in
+[docs/plans/04-goreleaser-packaging.md](docs/plans/04-goreleaser-packaging.md).
 
 ## Development
 

@@ -14,16 +14,6 @@ import (
 	"strings"
 )
 
-// Sources are read in order; the first usable one wins.
-//
-//	/etc/machine-id      — systemd, stable across reboots and renames
-//	/var/lib/dbus/machine-id — older systems without systemd
-//	/proc/sys/kernel/random/boot_id — last resort, changes per boot
-var sources = []string{
-	"/etc/machine-id",
-	"/var/lib/dbus/machine-id",
-}
-
 // Resolve returns a stable host identifier and the hostname.
 //
 // The machine-id is hashed rather than returned verbatim: on systemd hosts it
@@ -36,22 +26,17 @@ func Resolve() (id string, hostname string) {
 		hostname = "unknown"
 	}
 
-	for _, path := range sources {
-		// `sources` is a fixed package-level allowlist, not caller input.
-		raw, err := os.ReadFile(path) // #nosec G304 -- fixed allowlist above
-		if err != nil {
-			continue
-		}
-		machineID := strings.TrimSpace(string(raw))
-		if machineID == "" {
-			continue
-		}
-		return derive(machineID), hostname
+	// machineID is supplied per platform: /etc/machine-id on Linux, the
+	// registry MachineGuid on Windows, IOPlatformUUID on macOS.
+	if id := strings.TrimSpace(machineID()); id != "" {
+		return derive(id), hostname
 	}
 
-	// No machine-id available (some containers, non-systemd BSDs). Fall back to
-	// the hostname so the value is at least stable for this host, and accept
-	// that renaming it starts a new history.
+	// No machine identity available (some containers, hardened images, a
+	// locked-down registry). Fall back to the hostname so the value is at
+	// least stable for this host, and accept that renaming it starts a new
+	// history — which is exactly the failure this package exists to avoid, so
+	// it is a last resort rather than a default.
 	return derive("hostname:" + hostname), hostname
 }
 

@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 1 — Packaging |
 | **Depends on** | 01 |
-| **Status** | not started |
+| **Status** | **done** — logs and host id have per-OS implementations |
 
 ## Why
 
