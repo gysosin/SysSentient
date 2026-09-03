@@ -36,6 +36,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   400, which turned any staggered fleet upgrade into an outage.
 - A revoked or unrecognised agent now logs one actionable error naming the fix,
   instead of a generic warning that looks like a transient network problem.
+- **Metric rows are 15.1% smaller** (2249 → 1909 bytes, measured per column
+  over a real database). `top_processes` was `processes` rendered as text — the
+  identical data stored twice on every sample — and is now derived on read, so
+  no API shape changed and no history was dropped. Filesystem entries drop
+  `free_bytes` and `used_percent` only where they genuinely match the
+  derivation from `total_bytes` and `used_bytes`, which on ext4 and btrfs they
+  do not: reserved blocks mean free space is not total minus used.
 
 ### Fixed
 

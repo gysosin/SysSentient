@@ -355,11 +355,7 @@ func saveTx(db execer, m *models.SystemState) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal processes: %w", err)
 	}
-	filesystems := m.Filesystems
-	if filesystems == nil {
-		filesystems = []models.Filesystem{}
-	}
-	filesystemsJSON, err := json.Marshal(filesystems)
+	filesystemsJSON, err := marshalFilesystems(m.Filesystems)
 	if err != nil {
 		return fmt.Errorf("failed to marshal filesystems: %w", err)
 	}
@@ -380,7 +376,10 @@ func saveTx(db execer, m *models.SystemState) error {
 		sqlTime(m.Timestamp), m.CPUUsage, string(cpuPerCoreJSON), m.MemoryUsed, m.MemoryTotal,
 		m.SwapUsed, m.SwapTotal, m.DiskReadBytes, m.DiskWriteBytes, m.DiskIOPS,
 		m.NetSentBytes, m.NetRecvBytes, m.LoadAvg1, m.LoadAvg5, m.LoadAvg15,
-		m.Temperature, m.TopProcesses, string(processesJSON), m.UptimeSeconds, m.Hostname, string(filesystemsJSON), m.HostID,
+		// top_processes is written empty and derived on read: it is a pure
+		// function of processes, and storing both wrote the same information
+		// twice on every sample. The column stays for rows written earlier.
+		m.Temperature, "", string(processesJSON), m.UptimeSeconds, m.Hostname, string(filesystemsJSON), m.HostID,
 		m.MemoryCached, m.MemoryBuffers,
 	)
 	return err
@@ -445,6 +444,7 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
 		m.Processes = decodeProcesses(processesJSON)
 		m.Filesystems = decodeFilesystems(filesystemsJSON)
+		restoreTopProcesses(&m)
 		results = append(results, m)
 	}
 	return results, nil
@@ -459,11 +459,7 @@ func decodeCPUPerCore(raw string) []float64 {
 }
 
 func decodeFilesystems(raw string) []models.Filesystem {
-	var values []models.Filesystem
-	if err := json.Unmarshal([]byte(raw), &values); err != nil || values == nil {
-		return []models.Filesystem{}
-	}
-	return values
+	return unmarshalFilesystems([]byte(raw))
 }
 
 func decodeProcesses(raw string) []models.Process {
@@ -682,6 +678,7 @@ func (s *Store) GetRecentForHost(hostID string, limit int) ([]models.SystemState
 		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
 		m.Processes = decodeProcesses(processesJSON)
 		m.Filesystems = decodeFilesystems(filesystemsJSON)
+		restoreTopProcesses(&m)
 		results = append(results, m)
 	}
 	return results, rows.Err()

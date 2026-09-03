@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // SystemState represents a snapshot of the system's performance metrics
 type SystemState struct {
@@ -73,4 +77,23 @@ type AIAnalysis struct {
 	Summary            string     `json:"summary"`
 	DetailedAnalysis   string     `json:"detailedAnalysis"`
 	RecommendedActions []AIAction `json:"recommendedActions"`
+}
+
+// FormatTopProcesses renders the process list as the human-readable summary
+// used in AI prompts and by older dashboard builds.
+//
+// It lives here, rather than in the collector, because the storage layer
+// derives this string on read instead of storing it: the text is a pure
+// function of Processes, and persisting both wrote the same information twice
+// on every sample for 11% of each row.
+func FormatTopProcesses(processes []Process) string {
+	if len(processes) == 0 {
+		return "None"
+	}
+
+	parts := make([]string, 0, len(processes))
+	for _, p := range processes {
+		parts = append(parts, fmt.Sprintf("%s (%.1f%%, %dMB)", p.Name, p.CPU, p.Memory))
+	}
+	return strings.Join(parts, ", ")
 }
