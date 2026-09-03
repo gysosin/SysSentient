@@ -246,7 +246,10 @@ const Settings: React.FC = () => {
                   />
                   <Row label="Dashboard clients" value={health.websocketClients ?? '—'} />
                   <Row label="Host" value={current.hostname || 'unknown'} />
-                  <Row label="Fleet" value={`${hosts.length || 1} host${hosts.length === 1 ? '' : 's'}`} />
+                  {/* No `|| 1` fallback: the hosts table is populated in
+                      every mode now, so a zero here means something is
+                      genuinely wrong rather than a known gap being hidden. */}
+                  <Row label="Fleet" value={`${hosts.length} host${hosts.length === 1 ? '' : 's'}`} />
                   <Row label="Feed" value={`${feed.label} — ${feed.detail}`} />
                 </dl>
               )}

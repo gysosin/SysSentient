@@ -145,6 +145,11 @@ func main() {
 	lastAnalysisTime := time.Time{}
 	analysisCooldown := 5 * time.Minute // Don't analyze more than once every 5 minutes
 
+	// last_seen only needs to be fresh enough to answer "is this host
+	// reporting", not accurate to the individual sample.
+	const hostUpsertInterval = 30 * time.Second
+	var lastHostUpsert time.Time
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -188,6 +193,26 @@ func main() {
 			if err := store.Save(state); err != nil {
 				logger.Error("error saving metrics", "error", err)
 				continue
+			}
+
+			// Register this machine in the hosts table.
+			//
+			// Only the ingest path did this, so an all-in-one install — the
+			// default, and every single-node deployment — left `hosts` empty
+			// while metrics accumulated. GET /api/hosts returned [] and the
+			// dashboard papered over it with `hosts.length || 1`. The fleet
+			// features build on this table, so it has to be true first.
+			//
+			// Throttled rather than written every tick: this upserts one row
+			// whose only changing field is last_seen, and doing that twice a
+			// second would add a write per sample to keep a timestamp fresher
+			// than anything reads it.
+			if now := time.Now(); now.Sub(lastHostUpsert) >= hostUpsertInterval {
+				if err := store.UpsertHost(state.HostID, state.Hostname, version.Get().Version, now); err != nil {
+					logger.Warn("error registering host", "error", err)
+				} else {
+					lastHostUpsert = now
+				}
 			}
 
 			// Broadcast to WebSocket clients

@@ -4,7 +4,7 @@
 |---|---|
 | **Phase** | 2 — Performance |
 | **Depends on** | 00 |
-| **Status** | not started |
+| **Status** | **done** — single-node installs register themselves |
 
 ## Why
 

@@ -146,6 +146,13 @@ everything below is the initial published state rather than a delta.
 
 ### Fixed
 
+- **The hosts table was empty on every single-node install.** `UpsertHost` was
+  called only from the agent ingest path, so an all-in-one daemon — the default
+  — accumulated metrics while `GET /api/hosts` returned `[]`; measured against a
+  live database at 41,553 metrics rows and zero hosts. The dashboard hid it
+  behind a `hosts.length || 1` fallback, which is now removed, so a zero there
+  means something is genuinely wrong.
+
 - **Timestamps were stored in a format SQLite could not read, and the migration
   that tried to normalise them destroyed data.** `database/sql` leaves
   parameter encoding to the driver, and `modernc.org/sqlite` writes a
