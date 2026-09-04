@@ -16,6 +16,7 @@ import {
 
 import { useDashboard } from '../hooks/useDashboardData';
 import SystemChart from '../components/SystemChart';
+import { ExportButton } from '../components/ExportButton';
 import { MetricDrilldown, MetricKey } from '../components/MetricDrilldown';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -990,6 +991,13 @@ const Overview: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Placed with the charts, so what the button exports is the window
+          visible above it rather than an unrelated default. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SectionHeading eyebrow="History" title="Trends" />
+        <ExportButton />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <SystemChart title="CPU usage" data={metricsHistory} dataKey="cpuLoad" color="var(--chart-1)" unit="%" maxValue={100} />
