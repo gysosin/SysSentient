@@ -153,6 +153,27 @@ root filesystem.
 drill-down data the console shows. Reducing it further means storing less
 history, not storing the same history more compactly.
 
+## Archiving
+
+Retention deletes; archiving keeps. With `database.archive_path` set, rollup
+rows older than their tier's retention are written to a gzipped JSON-lines file
+and removed from the database, so the file stops growing while the history
+stays restorable:
+
+```
+archived 1000 rows
+database 8253440 -> 299008 bytes (96.4% smaller)
+archive on disk: 3725 bytes
+```
+
+Restore one with `sys-sentient --restore-archive <file>`. It is idempotent — the
+rollup table replaces a bucket rather than duplicating it — so a restore run
+twice, or overlapping data already present, is safe.
+
+The archive is written and fsynced before any row is deleted. A crash between
+the two leaves a duplicate archive, which is recoverable; the other order loses
+data.
+
 ## Still open
 
 - Collection remains synchronous with the tick. It no longer blocks for half a

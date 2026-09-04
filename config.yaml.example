@@ -73,6 +73,13 @@ database:
   five_minute_rollup_days: 365
   path: "sys-sentient.db"
   metrics_retention_hours: 24
+  # Where aged-out rollups are kept instead of being deleted. Empty disables
+  # archiving: retention alone, which is the historical behaviour.
+  #
+  # Retention decides what the dashboard can query; archiving decides whether
+  # anything older still exists. Restore one with:
+  #   sys-sentient --restore-archive <file>
+  archive_path: ""
   insights_retention_hours: 168
 
 alerting:
