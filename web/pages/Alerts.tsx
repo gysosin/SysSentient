@@ -9,6 +9,9 @@ import {
   fetchAlertHistory,
   fetchAlertRules,
 } from '../services/api';
+import { RuleControls } from '../components/RuleControls';
+import { fetchAlertRuleViews, type AlertRuleView } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import { useDashboard } from '../hooks/useDashboardData';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { ScreenHeading } from '../components/ui/section-heading';
@@ -36,6 +39,11 @@ const formatWhen = (iso: string): string => {
 
 const Alerts: React.FC = () => {
   const { selectedHost } = useDashboard();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  // The rule views carry override and mute state, which the plain rule list
+  // does not.
+  const [ruleViews, setRuleViews] = useState<AlertRuleView[]>([]);
   const [active, setActive] = useState<Alert[]>([]);
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [history, setHistory] = useState<AlertEvent[]>([]);
@@ -43,14 +51,16 @@ const Alerts: React.FC = () => {
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [a, r, h] = await Promise.all([
+    const [a, r, h, v] = await Promise.all([
       fetchActiveAlerts(selectedHost),
       fetchAlertRules(),
       fetchAlertHistory(50),
+      fetchAlertRuleViews(),
     ]);
     setActive(a);
     setRules(r);
     setHistory(h);
+    setRuleViews(v);
     setLoaded(true);
   }, [selectedHost]);
 
@@ -198,6 +208,7 @@ const Alerts: React.FC = () => {
                   <th scope="col" className="px-5 py-2.5 text-left font-medium">Condition</th>
                   <th scope="col" className="px-5 py-2.5 text-left font-medium">For</th>
                   <th scope="col" className="px-5 py-2.5 text-left font-medium">Severity</th>
+                  <th scope="col" className="px-5 py-2.5 text-left font-medium">Control</th>
                 </tr>
               </thead>
               <tbody>
@@ -220,13 +231,23 @@ const Alerts: React.FC = () => {
                         {rule.severity}
                       </Badge>
                     </td>
+                    <td className="px-5 py-2.5">
+                      {ruleViews.find((v) => v.id === rule.id) && (
+                        <RuleControls
+                          rule={ruleViews.find((v) => v.id === rule.id)!}
+                          isAdmin={isAdmin}
+                          onChange={setRuleViews}
+                        />
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <p className="text-mute px-5 pt-3 text-xs">
-            Rules are currently built in. Editing them from the browser needs the config API.
+            Thresholds, enablement and mutes are stored on the server and survive a restart.
+            A muted rule still evaluates and still appears above — it just stops notifying.
           </p>
         </CardContent>
       </Card>

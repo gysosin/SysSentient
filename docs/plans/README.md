@@ -34,6 +34,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [30](30-insight-history.md) | Insight history | done |
 | [25](25-chart-timerange.md) | Chart drill-down and a time picker | done |
 | [26](26-export-ui.md) | Export from the UI | done |
+| [31](31-notifications-and-rules.md) | Notification centre and rule control | done |
 
 ## Working agreement
 

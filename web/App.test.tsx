@@ -7,10 +7,15 @@ import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 // `node --test .tmp-tests/**/*.test.js` harness, `**` expanded as a single `*`
 // under sh, so a test here was silently skipped with a green exit code.
 
-vi.mock('./services/api', () => ({
+// Spread the real module first: a wholesale mock breaks every time an export
+// is added, and the failure surfaces as an unhandled rejection rather than a
+// failed assertion. Only the calls this suite needs to control are replaced.
+vi.mock('./services/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./services/api')>()),
   fetchMetricsHistory: vi.fn(async () => ({ metrics: [], processes: [] })),
   fetchRecentLogs: vi.fn(async () => []),
   fetchInsightHistory: vi.fn(async () => []),
+  fetchAlertHistory: vi.fn(async () => []),
   triggerAnalysis: vi.fn(async () => {
     throw new Error('not used');
   }),

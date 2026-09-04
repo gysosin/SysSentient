@@ -1029,3 +1029,51 @@ function filenameFrom(disposition: string | null, options: ExportOptions): strin
     const stamp = (options.to ?? new Date()).toISOString().slice(0, 10);
     return `sys-sentient_${options.resolution ?? 'metrics'}_${stamp}.${options.format}`;
 }
+
+/** An alert rule as the dashboard sees it. */
+export interface AlertRuleView {
+    id: string;
+    name: string;
+    metric: string;
+    op: string;
+    threshold: number;
+    for_seconds: number;
+    severity: string;
+    enabled: boolean;
+    overridden: boolean;
+    muted_until?: string;
+}
+
+/** A change to one rule. Omitted fields are left alone. */
+export interface RuleUpdate {
+    threshold?: number;
+    for_seconds?: number;
+    enabled?: boolean;
+    /** Silence notifications for this long. Zero clears an existing mute. */
+    mute_hours?: number;
+}
+
+export async function fetchAlertRuleViews(): Promise<AlertRuleView[]> {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/alerts/rules`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as AlertRuleView[];
+    return Array.isArray(data) ? data : [];
+}
+
+export async function updateAlertRule(id: string, update: RuleUpdate): Promise<AlertRuleView[]> {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/alerts/rules/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+    });
+    if (!res.ok) throw new Error((await res.text()).trim() || 'Could not update the rule');
+    return (await res.json()) as AlertRuleView[];
+}
+
+export async function resetAlertRule(id: string): Promise<AlertRuleView[]> {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/alerts/rules/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error((await res.text()).trim() || 'Could not reset the rule');
+    return (await res.json()) as AlertRuleView[];
+}

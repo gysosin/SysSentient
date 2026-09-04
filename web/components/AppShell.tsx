@@ -19,6 +19,7 @@ import {
 import { FeedStatus, FleetHost } from '../types';
 import { AuthUser } from '../services/api';
 import { cn } from '../lib/utils';
+import { NotificationCenter } from './NotificationCenter';
 import { RangePicker } from './RangePicker';
 import { UserMenu } from './UserMenu';
 import { Button } from './ui/button';
@@ -303,6 +304,10 @@ const AppShell: React.FC<Props> = ({
               </span>
             )}
 
+            {/* A bell, where one is expected. Alerts previously surfaced only
+                on their own page and as a count on a nav link, so anything
+                happening while you looked elsewhere went unnoticed. */}
+            <NotificationCenter />
             {user && <UserMenu user={user} onSignOut={onSignOut} />}
           </div>
         </div>
