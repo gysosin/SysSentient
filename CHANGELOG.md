@@ -9,6 +9,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A first run you cannot miss.** The one thing a new user must do — read a
+  setup token and open a URL — was logged as a single structured line among a
+  dozen others at startup. It is now printed in a box on a real terminal, and
+  the browser is opened at the setup page. The token stays out of the URL,
+  because a secret in a URL ends up in browser history.
+- **Homebrew cask and Scoop manifest**, scoped in plan 04 and never built. The
+  cask clears the Gatekeeper quarantine attribute, without which an unsigned
+  binary fails its first run with a dialog rather than a useful error.
+
+### Added
+
 - **An MCP server** at `/mcp`, offering the same six read-only tools the
   in-dashboard assistant uses, so Claude Desktop and other MCP clients can ask
   about your fleet. One surface rather than two implementations to keep in

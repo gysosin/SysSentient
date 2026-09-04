@@ -105,6 +105,42 @@ nfpms:
       postinstall: packaging/postinstall.sh
       preremove: packaging/preremove.sh
 
+homebrew_casks:
+  - name: sys-sentient
+    ids: [default]
+    repository:
+      owner: gysosin
+      name: homebrew-tap
+    homepage: https://gysosin.github.io/SysSentient/
+    description: Self-hosted server monitoring with alerting and AI-assisted diagnosis
+    # Not started on install: the first run mints a one-time setup token, and a
+    # service launched by the package manager would emit it before anyone is
+    # watching. The caveat says what to do instead.
+    caveats: |
+      Start it with:
+        sys-sentient
+
+      It prints a one-time setup token and opens http://localhost:8080/setup
+      so you can create the first administrator.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            # Unsigned binaries are quarantined by Gatekeeper; without this the
+            # first run fails with a dialog rather than a useful error.
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sys-sentient"]
+          end
+
+scoops:
+  - name: sys-sentient
+    ids: [default]
+    repository:
+      owner: gysosin
+      name: scoop-bucket
+    homepage: https://gysosin.github.io/SysSentient/
+    description: Self-hosted server monitoring with alerting and AI-assisted diagnosis
+    license: Apache-2.0
+
 checksum:
   name_template: checksums.txt
 

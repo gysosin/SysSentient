@@ -542,10 +542,17 @@ func bootstrapSetup(store *storage.Store, cfg *config.Config, logger *slog.Logge
 		logger.Error("failed to generate setup token", "error", err)
 		os.Exit(1)
 	}
+	setupURL := fmt.Sprintf("http://localhost:%d/setup", cfg.Server.Port)
 	logger.Warn("FIRST-RUN SETUP REQUIRED: no users exist yet",
-		"url", fmt.Sprintf("http://localhost:%d/setup", cfg.Server.Port),
+		"url", setupURL,
 		"token", token.String(),
 	)
+
+	// The structured line above is for a journal. This is for the person who
+	// just ran the binary and has one thing left to do.
+	announceFirstRun(os.Stdout, setupURL, token.String())
+	openBrowser(setupURL)
+
 	return token
 }
 
