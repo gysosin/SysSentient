@@ -6,10 +6,12 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  ReferenceArea,
   ResponsiveContainer,
 } from 'recharts';
 import { Maximize2 } from 'lucide-react';
 
+import { useDashboard } from '../hooks/useDashboardData';
 import { SystemMetrics } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -65,6 +67,27 @@ const formatClock = (ms: number): string => {
 const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, unit, maxValue }) => {
   const gradientId = `gradient-${dataKey}`;
   const [expanded, setExpanded] = React.useState(false);
+  const { zoomRange } = useDashboard();
+  // Drag bounds, in chart-x (epoch ms) units. Null while not dragging.
+  const [dragFrom, setDragFrom] = React.useState<number | null>(null);
+  const [dragTo, setDragTo] = React.useState<number | null>(null);
+
+  /**
+   * Turns a drag across the plot into a dashboard-wide window.
+   *
+   * The chart's own axis is not rescaled here: the range lives in one place so
+   * every chart, the process list and the drill-down all move together. Reading
+   * a spike means seeing what else the machine was doing at that moment, which
+   * a per-chart zoom cannot show.
+   */
+  const commitZoom = React.useCallback(() => {
+    if (dragFrom !== null && dragTo !== null && dragFrom !== dragTo) {
+      const [from, to] = dragFrom < dragTo ? [dragFrom, dragTo] : [dragTo, dragFrom];
+      zoomRange(new Date(from), new Date(to));
+    }
+    setDragFrom(null);
+    setDragTo(null);
+  }, [dragFrom, dragTo, zoomRange]);
 
   // A flat series on an 'auto' domain renders as a wildly oscillating sawtooth,
   // which reads as instability that isn't there. Pad a floor/ceiling instead.
@@ -82,7 +105,12 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
   // rather than a second, subtly different chart.
   const chartEl = (
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+        <AreaChart
+          data={data}
+          onMouseDown={(e) => setDragFrom(asNumber(e?.activeLabel))}
+          onMouseMove={(e) => dragFrom !== null && setDragTo(asNumber(e?.activeLabel))}
+          onMouseUp={commitZoom}
+          onMouseLeave={commitZoom} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={color} stopOpacity={0.35} />
@@ -133,6 +161,17 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
             formatter={(value) => [`${asNumber(value).toFixed(1)}${unit}`, title] as [string, string]}
             cursor={{ stroke: 'var(--muted-foreground)', strokeWidth: 1, strokeDasharray: '4 4' }}
           />
+          {/* Shows what the drag will select before it is committed. */}
+          {dragFrom !== null && dragTo !== null && (
+            <ReferenceArea
+              x1={Math.min(dragFrom, dragTo)}
+              x2={Math.max(dragFrom, dragTo)}
+              fill="var(--brand)"
+              fillOpacity={0.12}
+              stroke="var(--brand)"
+              strokeOpacity={0.4}
+            />
+          )}
           <Area
             type="monotone"
             dataKey={dataKey}

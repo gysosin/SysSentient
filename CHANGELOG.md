@@ -7,6 +7,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **A time picker, and drag-to-zoom on every chart.** Live / 15m / 1h / 6h /
+  24h / 7d / 30d in the header, respected by the whole dashboard; dragging
+  across any chart selects that window everywhere, so reading a spike shows
+  what else the machine was doing at that moment. The console previously
+  displayed two to four minutes however much history was retained.
+- The storage tier answering a window is shown — "every sample", "1-minute
+  averages", "5-minute averages" — so a chart never implies raw data while
+  drawing averages.
+
+### Fixed
+
+- **A bounded query returned the oldest N samples rather than a spread**, so a
+  six-hour request was answered with thirty-three minutes of data still
+  labelled six hours. Samples are now decimated evenly across the window.
+- A young install rendered every long window empty, because the rollup tiers
+  only hold data old enough to have been aggregated. The server falls back to
+  raw over the part of the window it can answer, and reports that narrower
+  window rather than overstating its coverage.
+
 ### Fixed
 
 - **Stored AI analyses were invisible.** With six in the database the dashboard

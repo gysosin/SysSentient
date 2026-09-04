@@ -11,6 +11,7 @@ import {
   fetchActiveAlerts,
   fetchHosts,
   fetchInsightHistory,
+  fetchMetricsRange,
   type InsightEntry,
   fetchMetricsHistory,
   fetchRecentLogs,
@@ -18,6 +19,7 @@ import {
 } from '../services/api';
 import { useWebSocket } from './useWebSocket';
 import { INSIGHT_REFRESH_RATE_MS, LOG_REFRESH_RATE_MS, REFRESH_RATE_MS } from '../constants';
+import { resolveBounds, useTimeRange, type TimeRange, type RangePreset } from './useTimeRange';
 
 // A feed is stale once it has missed several poll intervals. This is what makes
 // a half-open socket visible: the badge can read LIVE while no frame has
@@ -72,6 +74,14 @@ interface DashboardData {
   /** True while the stream is deliberately held still for inspection. */
   frozen: boolean;
   toggleFreeze: () => void;
+  /** The window every chart draws. */
+  range: TimeRange;
+  selectRange: (preset: RangePreset) => void;
+  /** Zoom to an explicit window, from a drag over a chart. */
+  zoomRange: (from: Date, to: Date) => void;
+  resetRange: () => void;
+  /** Which storage tier answered the current window: raw, 1m or 5m. */
+  rangeResolution: string;
   ai: {
     result: AIAnalysisResult | null;
     /** Every stored analysis, newest first. */
@@ -103,6 +113,9 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Only the polling fallback writes this; the live socket supplies its own.
   const [polledProcesses, setPolledProcesses] = useState<Process[]>([]);
   const [insightHistory, setInsightHistory] = useState<InsightEntry[]>([]);
+  const { range, selectPreset, zoomTo, reset, isLive } = useTimeRange();
+  const [rangeMetrics, setRangeMetrics] = useState<SystemMetrics[]>([]);
+  const [rangeResolution, setRangeResolution] = useState('raw');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [hosts, setHosts] = useState<FleetHost[]>([]);
   const [firingAlerts, setFiringAlerts] = useState(0);
@@ -186,6 +199,33 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       window.clearInterval(timer);
     };
   }, [selectedHost]);
+
+  /**
+   * Bounded window query.
+   *
+   * Runs only when a window is selected. While live the socket keeps driving
+   * the view, which is the behaviour the console has always had and what an
+   * operator watching a machine right now wants.
+   */
+  useEffect(() => {
+    if (isLive) {
+      setRangeMetrics([]);
+      return;
+    }
+    const bounds = resolveBounds(range);
+    if (!bounds) return;
+
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchMetricsRange(bounds.from, bounds.to, selectedHost);
+      if (cancelled || !result) return;
+      setRangeMetrics(result.metrics);
+      setRangeResolution(result.resolution);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLive, range, selectedHost]);
 
   // Fallback polling when the WebSocket is not connected.
   useEffect(() => {
@@ -292,7 +332,13 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [metricsHistory, liveProcesses, logs]);
 
   const value = useMemo<DashboardData>(() => {
-    const shownHistory = frozen ? frozen.history : metricsHistory;
+    // A selected window replaces the live tail. Freeze still wins, because
+    // it is an explicit request to stop the view moving.
+    const shownHistory = frozen
+      ? frozen.history
+      : isLive
+        ? metricsHistory
+        : rangeMetrics;
     const hasData = shownHistory.length > 0;
     const current = hasData ? shownHistory[shownHistory.length - 1] : EMPTY_METRIC;
     // Age is measured against the live sample even while frozen, so the feed
@@ -326,11 +372,16 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       feed,
       frozen: frozen !== null,
       toggleFreeze,
+      range,
+      selectRange: selectPreset,
+      zoomRange: zoomTo,
+      resetRange: reset,
+      rangeResolution,
       ai: { result: aiResult, history: insightHistory, loading: isAiLoading, error: aiError, run },
     };
     // `run` is stable enough for this provider's lifetime; excluded deliberately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metricsHistory, now, connected, liveProcesses, logs, aiResult, insightHistory, isAiLoading, aiError, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
+  }, [metricsHistory, now, connected, liveProcesses, logs, aiResult, insightHistory, isAiLoading, aiError, range, selectPreset, zoomTo, reset, rangeResolution, isLive, rangeMetrics, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 };

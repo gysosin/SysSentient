@@ -766,3 +766,200 @@ export async function revokeAgent(id: string): Promise<void> {
     throw new Error((await res.text()).trim() || 'Failed to revoke this device');
   }
 }
+
+/**
+ * A zero-valued metric, used as the base for aggregated buckets.
+ *
+ * A rollup carries averages for the series a chart plots and nothing for the
+ * per-sample detail — per-core load, filesystems, process lists — so those stay
+ * empty rather than being invented.
+ */
+const EMPTY_RANGE_METRIC: SystemMetrics = {
+    hostname: '',
+    hostId: '',
+    timestamp: 0,
+    cpuLoad: 0,
+    cpuPerCore: [],
+    memoryUsed: 0,
+    memoryTotal: 1,
+    memoryCached: 0,
+    memoryBuffers: 0,
+    swapUsed: 0,
+    swapTotal: 0,
+    temperature: 0,
+    uptimeSeconds: 0,
+    processCount: 0,
+    filesystems: [],
+    diskRead: 0,
+    diskWrite: 0,
+    diskIOPS: 0,
+    networkRx: 0,
+    networkTx: 0,
+    loadAvg1: 0,
+    loadAvg5: 0,
+    loadAvg15: 0,
+};
+
+/**
+ * Turns raw samples into chart metrics, deriving counter rates.
+ *
+ * Shared with the unbounded reader so a windowed query and the live tail agree
+ * on how disk and network rates are computed.
+ */
+function normalizeStates(rows: RawSystemState[]): SystemMetrics[] {
+    const sorted = [...rows].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    const out: SystemMetrics[] = [];
+    let previous: { state: RawSystemState; timestamp: number } | null = null;
+
+    for (const curr of sorted) {
+        const t1 = Date.parse(curr.timestamp);
+        if (!Number.isFinite(t1)) continue;
+
+        let diskReadRate = 0, diskWriteRate = 0, netRxRate = 0, netTxRate = 0;
+        if (previous) {
+            const dt = (t1 - previous.timestamp) / 1000;
+            if (dt > 0) {
+                diskReadRate = (finiteNumber(curr.disk_read_bytes) - finiteNumber(previous.state.disk_read_bytes)) / dt;
+                diskWriteRate = (finiteNumber(curr.disk_write_bytes) - finiteNumber(previous.state.disk_write_bytes)) / dt;
+                netRxRate = (finiteNumber(curr.net_recv_bytes) - finiteNumber(previous.state.net_recv_bytes)) / dt;
+                netTxRate = (finiteNumber(curr.net_sent_bytes) - finiteNumber(previous.state.net_sent_bytes)) / dt;
+            }
+        }
+
+        out.push({
+            hostname: nonEmptyString(curr.hostname, ''),
+            hostId: nonEmptyString(curr.host_id, ''),
+            timestamp: t1,
+            cpuLoad: finiteNumber(curr.cpu_usage),
+            cpuPerCore: finiteNumberArray(curr.cpu_per_core),
+            memoryUsed: finiteNumber(curr.memory_used) / 1024 / 1024,
+            memoryTotal: positiveFiniteNumber(curr.memory_total, 1) / 1024 / 1024,
+            memoryCached: finiteNumber(curr.memory_cached) / 1024 / 1024,
+            memoryBuffers: finiteNumber(curr.memory_buffers) / 1024 / 1024,
+            swapUsed: finiteNumber(curr.swap_used) / 1024 / 1024,
+            swapTotal: finiteNumber(curr.swap_total) / 1024 / 1024,
+            temperature: finiteNumber(curr.temperature),
+            uptimeSeconds: finiteNumber(curr.uptime_seconds),
+            processCount: finiteNumber(curr.process_count),
+            filesystems: normalizeFilesystems(curr.filesystems),
+            diskRead: Math.max(0, diskReadRate / 1024 / 1024),
+            diskWrite: Math.max(0, diskWriteRate / 1024 / 1024),
+            diskIOPS: finiteNumber(curr.disk_iops),
+            networkRx: Math.max(0, netRxRate / 1024),
+            networkTx: Math.max(0, netTxRate / 1024),
+            loadAvg1: finiteNumber(curr.load_avg_1),
+            loadAvg5: finiteNumber(curr.load_avg_5),
+            loadAvg15: finiteNumber(curr.load_avg_15),
+        });
+        previous = { state: curr, timestamp: t1 };
+    }
+    return out;
+}
+
+/** A bounded metrics query's reply. */
+export interface RangeResult {
+    resolution: string;
+    from: string;
+    to: string;
+    count: number;
+    metrics: SystemMetrics[];
+}
+
+/**
+ * Fetches metrics for an explicit window.
+ *
+ * The server picks the storage tier from the window's age and width and echoes
+ * back which one it used, so a chart can say whether it is drawing samples or
+ * averages rather than implying the former.
+ */
+export async function fetchMetricsRange(
+    from: Date,
+    to: Date,
+    hostID = '',
+): Promise<RangeResult | null> {
+    try {
+        const params = new URLSearchParams({
+            from: from.toISOString(),
+            to: to.toISOString(),
+        });
+        if (hostID) params.set('host', hostID);
+
+        const res = await fetchWithTimeout(`${API_BASE_URL}/metrics?${params}`);
+        if (!res.ok) return null;
+
+        const body = (await res.json()) as {
+            resolution?: string;
+            from?: string;
+            to?: string;
+            count?: number;
+            metrics?: unknown;
+        };
+
+        // Rollup buckets and raw samples arrive in different shapes; both are
+        // normalised into the one the charts already understand.
+        const rows = Array.isArray(body.metrics) ? body.metrics : [];
+        const metrics =
+            body.resolution === 'raw'
+                ? normalizeStates(rows as RawSystemState[])
+                : normalizeRollups(rows as RawRollupPoint[]);
+
+        return {
+            resolution: body.resolution ?? 'raw',
+            from: body.from ?? from.toISOString(),
+            to: body.to ?? to.toISOString(),
+            count: body.count ?? metrics.length,
+            metrics,
+        };
+    } catch (e) {
+        console.error('API Error fetchMetricsRange', e);
+        return null;
+    }
+}
+
+/** One aggregated bucket as the server sends it. */
+interface RawRollupPoint {
+    bucket?: string;
+    host_id?: string;
+    samples?: number;
+    cpu_avg?: number;
+    cpu_max?: number;
+    memory_used_avg?: number;
+    memory_total?: number;
+    swap_used_avg?: number;
+    load_avg_1?: number;
+    disk_read_avg?: number;
+    disk_write_avg?: number;
+    net_sent_avg?: number;
+    net_recv_avg?: number;
+    temperature_avg?: number;
+}
+
+/**
+ * Turns aggregated buckets into the chart's metric shape.
+ *
+ * Averages, not samples: disk and network are already per-second rates in a
+ * rollup, so unlike the raw path there are no counter deltas to derive.
+ */
+function normalizeRollups(points: RawRollupPoint[]): SystemMetrics[] {
+    return points
+        .map((p) => {
+            const at = p.bucket ? Date.parse(p.bucket) : NaN;
+            if (!Number.isFinite(at)) return null;
+            return {
+                ...EMPTY_RANGE_METRIC,
+                timestamp: at,
+                hostId: p.host_id ?? '',
+                cpuLoad: finiteNumber(p.cpu_avg),
+                memoryUsed: finiteNumber(p.memory_used_avg) / (1024 * 1024),
+                memoryTotal: finiteNumber(p.memory_total) / (1024 * 1024),
+                swapUsed: finiteNumber(p.swap_used_avg) / (1024 * 1024),
+                loadAvg1: finiteNumber(p.load_avg_1),
+                diskRead: finiteNumber(p.disk_read_avg),
+                diskWrite: finiteNumber(p.disk_write_avg),
+                networkRx: finiteNumber(p.net_recv_avg),
+                networkTx: finiteNumber(p.net_sent_avg),
+                temperature: finiteNumber(p.temperature_avg),
+            } satisfies SystemMetrics;
+        })
+        .filter((m): m is SystemMetrics => m !== null);
+}

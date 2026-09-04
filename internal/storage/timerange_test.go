@@ -172,3 +172,47 @@ func TestQueryRangeCapsRunawayLimits(t *testing.T) {
 		t.Errorf("got %d samples with limit 50", len(got))
 	}
 }
+
+func TestQueryRangeSpreadsSamplesAcrossTheWindow(t *testing.T) {
+	s := rangeStore(t)
+	start := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
+	// 6,000 samples at one a second is 100 minutes — far more than any caller
+	// takes, so the result must be decimated rather than cut short.
+	const samples = 6000
+	seedEverySecond(t, s, "h1", start, samples)
+
+	window := Range{From: start, To: start.Add(samples * time.Second)}
+	got, err := s.QueryRange("h1", window, 200)
+	if err != nil {
+		t.Fatalf("QueryRange: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("no samples returned")
+	}
+	if len(got) > 200 {
+		t.Fatalf("got %d samples, want at most 200", len(got))
+	}
+
+	// A plain LIMIT returns the oldest N: a six-hour request answered with
+	// thirty-three minutes of data, still labelled six hours. The result must
+	// reach the end of the window.
+	span := got[len(got)-1].Timestamp.Sub(got[0].Timestamp)
+	if want := window.Duration() * 9 / 10; span < want {
+		t.Fatalf("returned samples span %v of a %v window — truncated, not decimated", span, window.Duration())
+	}
+
+	// And the gaps should be roughly even, not clustered at one end.
+	var maxGap, minGap time.Duration = 0, time.Hour
+	for i := 1; i < len(got); i++ {
+		gap := got[i].Timestamp.Sub(got[i-1].Timestamp)
+		if gap > maxGap {
+			maxGap = gap
+		}
+		if gap < minGap {
+			minGap = gap
+		}
+	}
+	if maxGap > 3*minGap {
+		t.Errorf("uneven spacing: gaps range %v..%v", minGap, maxGap)
+	}
+}

@@ -19,6 +19,7 @@ import {
 import { FeedStatus, FleetHost } from '../types';
 import { AuthUser } from '../services/api';
 import { cn } from '../lib/utils';
+import { RangePicker } from './RangePicker';
 import { UserMenu } from './UserMenu';
 import { Button } from './ui/button';
 import {
@@ -236,6 +237,10 @@ const AppShell: React.FC<Props> = ({
                 {feed.detail}
               </span>
             </div>
+
+            {/* The window every chart draws. Beside the feed chip because the
+                two together answer "what am I looking at, and is it current". */}
+            <RangePicker />
 
             {/* Freeze pins the view without pausing collection, so a spike can
                 be read instead of scrolling away. Deliberately next to the feed

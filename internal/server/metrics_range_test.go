@@ -170,3 +170,33 @@ func TestMetricsAcceptsAnUnencodedTimezoneOffset(t *testing.T) {
 		t.Fatalf("= %d (%s)", rec.Code, rec.Body.String())
 	}
 }
+
+func TestMetricsFallsBackToRawWhenTheTierIsEmpty(t *testing.T) {
+	srv, _ := ingestServer(t)
+	// A young install: samples exist, but nothing is old enough to have been
+	// rolled up, so every rollup tier is empty.
+	start := time.Now().Add(-90 * time.Minute).Truncate(time.Second)
+	seedRange(t, srv, "h1", start, 600)
+
+	from := time.Now().Add(-2 * time.Hour)
+	rec := getMetrics(t, srv, "?from="+url.QueryEscape(from.Format(time.RFC3339)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("= %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Resolution string `json:"resolution"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// A blank chart beside a database full of samples reads as broken
+	// software; a coarser answer is better than none.
+	if resp.Count == 0 {
+		t.Fatal("empty result: the rollup tier was empty and no fallback happened")
+	}
+	if resp.Resolution != storage.ResolutionRaw {
+		t.Errorf("resolution = %q, want raw after the fallback", resp.Resolution)
+	}
+}

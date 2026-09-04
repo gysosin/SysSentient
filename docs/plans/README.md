@@ -32,6 +32,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [24](24-time-range-queries.md) | Time-range query engine | done |
 | [27](27-process-accuracy.md) | Make processes true | done |
 | [30](30-insight-history.md) | Insight history | done |
+| [25](25-chart-timerange.md) | Chart drill-down and a time picker | done |
 
 ## Working agreement
 
