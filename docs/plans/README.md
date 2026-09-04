@@ -36,6 +36,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [26](26-export-ui.md) | Export from the UI | done |
 | [31](31-notifications-and-rules.md) | Notification centre and rule control | done |
 | [29](29-agent-bootstrap.md) | Let the server hand out the agent | done |
+| [28](28-hosts-screen.md) | Hosts as a first-class screen | done |
 
 ## Working agreement
 

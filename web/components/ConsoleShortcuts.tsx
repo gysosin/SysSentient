@@ -9,11 +9,12 @@ import {
   DialogTitle,
 } from './ui/dialog';
 
-/** Section order matches the navigation, so 1-6 map to what the eye already sees. */
-const ROUTES = ['/', '/processes', '/logs', '/insights', '/alerts', '/settings'];
+/** Section order matches the navigation, so 1-7 map to what the eye already sees. */
+// Order matches the nav, so the number keys and the tab strip agree.
+const ROUTES = ['/', '/processes', '/hosts', '/logs', '/insights', '/alerts', '/settings'];
 
 export const SHORTCUTS: { keys: string; action: string }[] = [
-  { keys: '1 – 6', action: 'Jump to a section' },
+  { keys: '1 – 7', action: 'Jump to a section' },
   { keys: 'Space', action: 'Freeze / resume the live stream' },
   { keys: 'T', action: 'Switch between dark and light' },
   { keys: '?', action: 'Show this list' },
@@ -57,7 +58,7 @@ export function ConsoleShortcuts({ openSignal = 0, onToggleFreeze, onToggleTheme
         return;
       }
 
-      if (event.key >= '1' && event.key <= '6') {
+      if (event.key >= '1' && event.key <= '7') {
         navigate(ROUTES[Number(event.key) - 1]);
         return;
       }

@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A Hosts screen.** "Host" meant three unreconciled things — a hostname on a
+  sample, a row from `/api/hosts`, and an enrolled agent — with no page listing
+  any of them, and a switcher that stayed hidden until a second machine
+  existed. `/hosts` now lists every machine with its live state, version and
+  last-seen, shows the **host id** rather than only the hostname (two machines
+  can share a name), and marks which is this machine and which report without
+  an enrolled credential.
+
+### Added
+
 - **The server hands out the agent.** The Devices screen told you to install
   SysSentient on the target machine and offered nothing to install it with —
   the daemon served no binaries, installers or scripts. It now serves
