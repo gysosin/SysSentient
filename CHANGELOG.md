@@ -9,6 +9,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A notification centre.** The console had no notification surface at all —
+  no bell, no toasts, no unread state — so an alert that fired while you were
+  on another screen was invisible until you went looking. A bell with unread
+  state and a panel now carry every transition.
+- **Alert rules are editable and mutable.** Threshold, `for`, enable/disable
+  and mute-until, stored server-side and surviving a restart. Only the
+  differences from the built-in defaults are stored, so an untouched rule
+  follows the defaults as they improve. Mute suppresses notification, not
+  evaluation — the alert still shows, it just stops paging anyone — and is
+  bounded at 30 days, because a silence with no end is a rule disabled forever.
+
+### Fixed
+
+- **Alerts flapped around their threshold.** `for` delayed escalation only;
+  resolution was instantaneous on a single non-breaching sample, so a host
+  oscillating at 89.9/90.1 against a `> 90` rule fired and resolved on every
+  poll. A firing alert must now stay clear for a settle window.
+- `Rule.Enabled` was honoured by the evaluator but nothing could ever set it
+  false: the rules endpoint was read-only and `ReplaceRules` had no caller.
+
+### Added
+
 - **Export from the dashboard.** The export endpoint has been complete
   server-side since the backup work and nothing in the UI called it, so getting
   data out meant constructing a URL by hand. A control beside the charts now

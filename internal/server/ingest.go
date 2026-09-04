@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"sys-sentient/internal/alerting"
 	"sys-sentient/internal/models"
 	"sys-sentient/internal/storage"
 )
@@ -174,8 +175,13 @@ func (s *Server) evaluateAndRecord(state models.SystemState) {
 		}
 	}
 
+	// A muted rule keeps evaluating and still shows on the dashboard; it just
+	// stops paging anyone. Suppressing evaluation instead would hide the
+	// problem, which is not what "mute" means.
 	if s.dispatcher != nil {
-		go s.dispatcher.Dispatch(gocontext.Background(), transitions)
+		if notify := s.notifiable(transitions, now); len(notify) > 0 {
+			go s.dispatcher.Dispatch(gocontext.Background(), notify)
+		}
 	}
 }
 
@@ -195,4 +201,19 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 
 	setProtectedJSONHeaders(w)
 	writeJSONBody(w, hosts)
+}
+
+// notifiable filters out transitions whose rule is muted.
+func (s *Server) notifiable(transitions []alerting.Alert, now time.Time) []alerting.Alert {
+	muted := s.mutedRules(now)
+	if len(muted) == 0 {
+		return transitions
+	}
+	out := make([]alerting.Alert, 0, len(transitions))
+	for _, t := range transitions {
+		if !muted[t.RuleID] {
+			out = append(out, t)
+		}
+	}
+	return out
 }

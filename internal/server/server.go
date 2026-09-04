@@ -149,7 +149,9 @@ func (s *Server) routes() http.Handler {
 	// reads rather than left open.
 	mux.HandleFunc("GET /api/export", s.requireAuth(rateLimit(s.logsLimiter, "2", s.handleExport)))
 	mux.HandleFunc("GET /api/alerts", s.requireAuth(s.handleAlerts))
-	mux.HandleFunc("GET /api/alerts/rules", s.requireAuth(s.handleAlertRules))
+	mux.HandleFunc("GET /api/alerts/rules", s.requireAuth(s.handleListRules))
+	mux.HandleFunc("PATCH /api/alerts/rules/{ruleID}", s.requireAdmin(s.handleUpdateRule))
+	mux.HandleFunc("DELETE /api/alerts/rules/{ruleID}", s.requireAdmin(s.handleResetRule))
 	mux.HandleFunc("GET /api/alerts/history", s.requireAuth(s.handleAlertHistory))
 
 	// Admin only: anything that spends money, changes state, or manages people.
@@ -644,34 +646,6 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	setProtectedJSONHeaders(w)
 	writeJSONBody(w, active)
-}
-
-// handleAlertRules returns the configured rules so the UI can show what is
-// being evaluated rather than leaving thresholds invisible.
-func (s *Server) handleAlertRules(w http.ResponseWriter, r *http.Request) {
-	type ruleView struct {
-		alerting.Rule
-		// For is a time.Duration, which marshals as raw nanoseconds. Emit a
-		// human-readable form alongside it so clients need no unit knowledge.
-		ForSeconds float64 `json:"for_seconds"`
-		ForLabel   string  `json:"for_label"`
-	}
-
-	rules := []alerting.Rule{}
-	if s.evaluator != nil {
-		rules = s.evaluator.Rules()
-	}
-
-	views := make([]ruleView, 0, len(rules))
-	for _, rule := range rules {
-		views = append(views, ruleView{
-			Rule:       rule,
-			ForSeconds: rule.For.Seconds(),
-			ForLabel:   rule.For.String(),
-		})
-	}
-	setProtectedJSONHeaders(w)
-	writeJSONBody(w, views)
 }
 
 // handleAlertHistory returns recent alert transitions.

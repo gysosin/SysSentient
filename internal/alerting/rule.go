@@ -150,6 +150,10 @@ type Alert struct {
 	// Acknowledged silences notifications for this activation without
 	// resolving it.
 	Acknowledged bool `json:"acknowledged"`
+	// ClearSince is when the metric last stopped breaching. An alert must stay
+	// clear for the resolve window before it is considered over, so a host
+	// oscillating either side of the threshold does not flap.
+	ClearSince time.Time `json:"-"`
 }
 
 // Summary renders a human-readable one-liner for notifications.

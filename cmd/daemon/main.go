@@ -161,6 +161,13 @@ func main() {
 	})
 	srv.SetRuntime(runtime)
 
+	// Operator changes to alert rules outlive a restart. Without this the
+	// daemon came back on the built-in defaults and silently un-muted
+	// everything somebody had deliberately silenced.
+	if err := srv.ReloadRules(); err != nil {
+		logger.Error("could not load stored alert rule changes", "error", err)
+	}
+
 	maint := newMaintenance(store, runtime, cfg.Database.InsightsRetentionHours, logger)
 	// Once at boot, so a restart does not leave the database untended for an
 	// hour and a fresh install has queryable tiers as soon as data ages in.

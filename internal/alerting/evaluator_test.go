@@ -99,7 +99,11 @@ func TestRecoveryResolves(t *testing.T) {
 	ev.Evaluate(stateWithCPU(95), base)
 	ev.Evaluate(stateWithCPU(95), base.Add(61*time.Second))
 
-	transitions := ev.Evaluate(stateWithCPU(5), base.Add(2*time.Minute))
+	// Two clear samples: the first starts the settle window, the second
+	// resolves once it has elapsed. A firing alert no longer resolves on a
+	// single dip, so a host sitting on the threshold stops flapping.
+	ev.Evaluate(stateWithCPU(5), base.Add(2*time.Minute))
+	transitions := ev.Evaluate(stateWithCPU(5), base.Add(4*time.Minute))
 	if len(transitions) != 1 {
 		t.Fatalf("got %d transitions, want 1 resolve", len(transitions))
 	}
@@ -265,8 +269,10 @@ func TestAlertStateIsPerHost(t *testing.T) {
 		t.Fatalf("Active() = %d alerts, want 2 (one per host)", got)
 	}
 
-	// host-b recovering must not resolve host-a.
-	resolved := ev.Evaluate(stateFor("host-b", 5), now.Add(time.Minute))
+	// host-b recovering must not resolve host-a. Two samples: the first starts
+	// the resolve window, the second clears it once the settle time has passed.
+	ev.Evaluate(stateFor("host-b", 5), now.Add(time.Minute))
+	resolved := ev.Evaluate(stateFor("host-b", 5), now.Add(3*time.Minute))
 	if len(resolved) != 1 || resolved[0].HostID != "host-b" {
 		t.Fatalf("resolve transitions = %+v, want one for host-b only", resolved)
 	}
@@ -334,5 +340,45 @@ func TestForgetHostDropsItsAlerts(t *testing.T) {
 	active := ev.Active()
 	if len(active) != 1 || active[0].HostID != "host-b" {
 		t.Fatalf("after ForgetHost(host-a), Active() = %+v, want only host-b", active)
+	}
+}
+
+func TestAlertDoesNotFlapAroundTheThreshold(t *testing.T) {
+	rules := []Rule{{
+		ID: "cpu-high", Name: "CPU high", Metric: MetricCPUUsage,
+		Op: GreaterThan, Threshold: 90, For: 0,
+		Severity: SeverityWarning, Enabled: true,
+	}}
+	ev := NewEvaluator(rules)
+	now := time.Now()
+
+	state := func(cpu float64) models.SystemState {
+		return models.SystemState{HostID: "h1", Hostname: "h1", CPUUsage: cpu}
+	}
+
+	if fired := ev.Evaluate(state(90.1), now); len(fired) != 1 {
+		t.Fatalf("first breach produced %d transitions, want 1", len(fired))
+	}
+
+	// A host sitting on the threshold oscillates every poll. Without a settle
+	// window each dip resolved the alert and each rise re-fired it, notifying
+	// on every sample.
+	var transitions int
+	for i := 1; i <= 20; i++ {
+		cpu := 89.9
+		if i%2 == 0 {
+			cpu = 90.1
+		}
+		transitions += len(ev.Evaluate(state(cpu), now.Add(time.Duration(i)*2*time.Second)))
+	}
+	if transitions != 0 {
+		t.Errorf("oscillating around the threshold produced %d transitions, want 0", transitions)
+	}
+
+	// Sustained recovery still resolves.
+	ev.Evaluate(state(10), now.Add(time.Minute))
+	resolved := ev.Evaluate(state(10), now.Add(3*time.Minute))
+	if len(resolved) != 1 || resolved[0].State != StateResolved {
+		t.Fatalf("sustained recovery produced %+v, want one resolve", resolved)
 	}
 }

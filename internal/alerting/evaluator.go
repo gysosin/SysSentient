@@ -29,7 +29,14 @@ type Evaluator struct {
 	mu     sync.RWMutex
 	rules  []Rule
 	active map[alertKey]*Alert
+	// resolveAfter is how long a metric must stay clear before its alert
+	// resolves. Without it a single non-breaching sample resolved the alert,
+	// so a host sitting on the threshold fired and resolved on every poll.
+	resolveAfter time.Duration
 }
+
+// DefaultResolveAfter is the settle time applied unless overridden.
+const DefaultResolveAfter = 60 * time.Second
 
 // alertKey identifies one rule's activation on one host.
 type alertKey struct {
@@ -39,9 +46,21 @@ type alertKey struct {
 
 func NewEvaluator(rules []Rule) *Evaluator {
 	return &Evaluator{
-		rules:  rules,
-		active: make(map[alertKey]*Alert),
+		rules:        rules,
+		active:       make(map[alertKey]*Alert),
+		resolveAfter: DefaultResolveAfter,
 	}
+}
+
+// SetResolveAfter changes the settle time. Zero restores the default; a
+// negative value disables hysteresis, which is only useful in tests.
+func (e *Evaluator) SetResolveAfter(d time.Duration) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if d == 0 {
+		d = DefaultResolveAfter
+	}
+	e.resolveAfter = d
 }
 
 // Rules returns a copy of the configured rules.
@@ -194,6 +213,8 @@ func (e *Evaluator) Evaluate(state models.SystemState, now time.Time) []Alert {
 		case breached && tracked:
 			existing.Value = value
 			existing.Hostname = state.Hostname
+			// Breaching again cancels a resolve in progress.
+			existing.ClearSince = time.Time{}
 			if existing.State == StatePending && now.Sub(existing.StartedAt) >= rule.For {
 				existing.State = StateFiring
 				existing.FiredAt = now
@@ -202,8 +223,23 @@ func (e *Evaluator) Evaluate(state models.SystemState, now time.Time) []Alert {
 
 		case !breached && tracked:
 			// Only a firing alert resolves. A pending one never notified
-			// anybody, so it is dropped without a resolve event.
+			// anybody, so it is dropped without a resolve event -- and without
+			// waiting out the settle window below, which exists to stop
+			// notifications flapping and has nothing to hold back here.
 			if existing.State == StateFiring {
+				// Hysteresis. A single non-breaching sample used to resolve
+				// immediately, so a host oscillating either side of the
+				// threshold flapped on every poll: firing and resolving, and
+				// notifying each time. A firing alert must stay clear for
+				// ResolveAfter before it is considered over.
+				if existing.ClearSince.IsZero() {
+					existing.ClearSince = now
+				}
+				if now.Sub(existing.ClearSince) < e.resolveAfter {
+					existing.Value = value
+					continue
+				}
+
 				resolved := *existing
 				resolved.State = StateResolved
 				resolved.Value = value
