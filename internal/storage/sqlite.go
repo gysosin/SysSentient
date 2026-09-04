@@ -167,11 +167,22 @@ func createTable(db *sql.DB) error {
 		severity TEXT NOT NULL,
 		value REAL NOT NULL,
 		threshold REAL NOT NULL,
-		hostname TEXT NOT NULL DEFAULT ''
+		hostname TEXT NOT NULL DEFAULT '',
+		host_id TEXT NOT NULL DEFAULT ''
 	);
 	`
 	if _, err = db.Exec(queryAlertEvents); err != nil {
 		return fmt.Errorf("failed to create alert_events table: %w", err)
+	}
+
+	// Existing installs predate host_id. Added separately from the CREATE
+	// above, which only runs for a database that does not exist yet.
+	if err := addColumnIfMissing(db, "alert_events", "host_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_alert_events_host ON alert_events(host_id, occurred_at);`); err != nil {
+		return fmt.Errorf("failed to index alert_events by host: %w", err)
 	}
 
 	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_alert_events_occurred ON alert_events(occurred_at);`); err != nil {
@@ -288,7 +299,7 @@ func migrateSchema(db *sql.DB) error {
 	}
 
 	for _, col := range newColumns {
-		exists, err := metricsColumnExists(db, col.name)
+		exists, err := columnExists(db, "metrics", col.name)
 		if err != nil {
 			return fmt.Errorf("failed to inspect metrics.%s: %w", col.name, err)
 		}
@@ -304,8 +315,31 @@ func migrateSchema(db *sql.DB) error {
 	return nil
 }
 
-func metricsColumnExists(db *sql.DB, columnName string) (bool, error) {
-	rows, err := db.Query(`PRAGMA table_info(metrics)`)
+// addColumnIfMissing widens an existing table in place.
+//
+// SQLite has no ADD COLUMN IF NOT EXISTS, and re-adding a column is an error
+// rather than a no-op, so every migration has to ask first.
+func addColumnIfMissing(db *sql.DB, table, column, columnType string) error {
+	exists, err := columnExists(db, table, column)
+	if err != nil {
+		return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
+	}
+	if exists {
+		return nil
+	}
+
+	// SQL identifiers cannot be bound as parameters. Every argument reaching
+	// here is a literal from this package -- never config, a request, or the
+	// database -- so there is no injection surface.
+	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnType)); err != nil {
+		return fmt.Errorf("failed to add %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+func columnExists(db *sql.DB, table, columnName string) (bool, error) {
+	// Same reasoning as above: table is a package literal.
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, err
 	}
@@ -523,6 +557,10 @@ type AlertEvent struct {
 	Value      float64   `json:"value"`
 	Threshold  float64   `json:"threshold"`
 	Hostname   string    `json:"hostname"`
+	// HostID identifies the machine. Hostname alone cannot: two hosts sharing
+	// a name render as duplicate alerts and their history cannot be joined
+	// back to the hosts table.
+	HostID string `json:"host_id"`
 }
 
 // SaveAlertEvent records one alert transition. Only transitions are stored, so
@@ -530,10 +568,10 @@ type AlertEvent struct {
 // one per poll.
 func (s *Store) SaveAlertEvent(event AlertEvent) error {
 	_, err := s.db.Exec(`
-		INSERT INTO alert_events (occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO alert_events (occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname, host_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sqlTime(event.OccurredAt), event.RuleID, event.RuleName, event.Metric,
-		event.State, event.Severity, event.Value, event.Threshold, event.Hostname,
+		event.State, event.Severity, event.Value, event.Threshold, event.Hostname, event.HostID,
 	)
 	return err
 }
@@ -545,7 +583,7 @@ func (s *Store) GetRecentAlertEvents(limit int) ([]AlertEvent, error) {
 	}
 
 	rows, err := s.db.Query(`
-		SELECT occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname
+		SELECT occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname, COALESCE(host_id, '')
 		FROM alert_events ORDER BY occurred_at DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -557,7 +595,7 @@ func (s *Store) GetRecentAlertEvents(limit int) ([]AlertEvent, error) {
 	for rows.Next() {
 		var e AlertEvent
 		if err := rows.Scan(&e.OccurredAt, &e.RuleID, &e.RuleName, &e.Metric,
-			&e.State, &e.Severity, &e.Value, &e.Threshold, &e.Hostname); err != nil {
+			&e.State, &e.Severity, &e.Value, &e.Threshold, &e.Hostname, &e.HostID); err != nil {
 			return nil, err
 		}
 		events = append(events, e)

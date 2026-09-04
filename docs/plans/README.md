@@ -27,6 +27,8 @@ own. Work them roughly in order; dependencies are stated in each file.
 | 19 | [Repo metadata and wiki](19-repo-metadata-wiki.md) | 5 — Docs |
 | 20 | [Drill-down widgets](20-drilldown-widgets.md) | 4 — Console |
 | 21 | [Harvest from stale branches](21-harvest-from-stale-branches.md) | reference |
+| [22](22-service-install.md) | `service install` for systemd, launchd and Windows | done |
+| [23](23-server-mode-maintenance.md) | Make server mode a first-class citizen | done |
 
 ## Working agreement
 
