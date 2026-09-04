@@ -22,6 +22,8 @@ interface ErrorResponse {
 }
 
 interface RawSystemState {
+    process_count?: number;
+    host_id?: string;
     hostname?: string;
     timestamp: string;
     cpu_usage?: number;
@@ -105,6 +107,8 @@ export const fetchMetricsHistory = async (hostID = ''): Promise<{ metrics: Syste
                 swapTotal: finiteNumber(curr.swap_total) / 1024 / 1024,
                 temperature: finiteNumber(curr.temperature),
                 uptimeSeconds: finiteNumber(curr.uptime_seconds),
+                processCount: finiteNumber(curr.process_count),
+                hostId: nonEmptyString(curr.host_id, ''),
                 filesystems: normalizeFilesystems(curr.filesystems),
                 diskRead: Math.max(0, diskReadRate / 1024 / 1024), // MB/s
                 diskWrite: Math.max(0, diskWriteRate / 1024 / 1024),
@@ -318,7 +322,11 @@ function parseProcesses(procStr: string): Process[] {
             name: match[1],
             user: match[4] || '?',
             cpu: parseFloat(match[2]),
+            // The legacy summary string carries only one CPU figure and whole
+            // megabytes; nothing finer can be recovered from it.
+            cpuCore: parseFloat(match[2]),
             memory: parseInt(match[3], 10),
+            memoryBytes: parseInt(match[3], 10) * 1024 * 1024,
             state: 'Running'
         });
     }
@@ -327,7 +335,7 @@ function parseProcesses(procStr: string): Process[] {
 
     return procStr.split(', ').map((p) => {
         return {
-            pid: 0, name: p, user: '?', cpu: 0, memory: 0, state: 'Running'
+            pid: 0, name: p, user: '?', cpu: 0, cpuCore: 0, memory: 0, memoryBytes: 0, state: 'Running'
         };
     });
 }

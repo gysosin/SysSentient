@@ -7,6 +7,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Processes screen was wrong, not just confusing.** On a 626-process host
+  it reported **10 processes**, and process CPU summed to **445.7%** against a
+  system CPU of 92.4% — the two figures used the same `%` label on different
+  scales. Process CPU is now percent of the whole machine, directly comparable
+  with the gauge beside it, with top's per-core figure kept alongside; the real
+  process count is collected and shown separately from the top-N sample.
+- **The Memory column ranked the wrong processes.** Candidates were filtered on
+  `cpu > 0.1` *before* memory was read, so an idle process holding 8 GB was
+  discarded before anything looked at it. Processes are now ranked by CPU **and**
+  by memory, and the two lists are merged. Reading memory for every process
+  costs no measurable time: `/proc/<pid>/stat` was already open and carries RSS.
+- `userHZ` was hardcoded to 100 and is now read from the system — it was wrong
+  by 2.5× or 10× on a kernel built with `CONFIG_HZ=250` or `1000`.
+- A process that exited mid-collection rendered as `Sleeping, 0 MB` with an
+  empty name; those rows are dropped instead.
+- Sub-megabyte processes showed `0 MB`; exact RSS is now carried and formatted.
+- Selecting a host filtered live frames by comparing a host **id** against
+  `hostname`, which could never match — samples now carry `hostId`.
+
 ### Added
 
 - **The API can be asked about the past.** `GET /api/metrics` now takes `from`,

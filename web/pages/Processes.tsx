@@ -25,16 +25,30 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; className?: str
 const stateVariant = (state: Process['state']) =>
   state === 'Zombie' ? 'crit' : state === 'Running' ? 'ok' : 'outline';
 
+/**
+ * Renders resident memory without rounding a real process away.
+ *
+ * Whole megabytes showed a 700 KB process as "0 MB", which reads as a bug
+ * rather than a small process.
+ */
+function formatMemory(proc: { memory: number; memoryBytes: number }): string {
+  const bytes = proc.memoryBytes || proc.memory * 1024 * 1024;
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${Math.round(bytes / 1024 / 1024)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 const Processes: React.FC = () => {
-  const { processes, feed } = useDashboard();
+  const { processes, feed, current } = useDashboard();
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('cpu');
   const [descending, setDescending] = useState(true);
 
-  const peakCPU = useMemo(
-    () => Math.max(100, ...processes.map((p) => p.cpu)),
-    [processes],
-  );
+  // CPU is whole-machine percent now, so the bar scales against 100 rather
+  // than a running peak. It previously scaled against max(100, peak) because
+  // per-core values exceed 100, which made a full bar mean nothing fixed.
+  const peakCPU = 100;
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -74,14 +88,16 @@ const Processes: React.FC = () => {
       <ScreenHeading
         eyebrow="Runtime inventory"
         title="Processes"
-        description="What is consuming the machine right now. Sort, filter and search without losing the host context."
+        description="The heaviest processes on this machine by CPU and by memory. Sorting and search cover the tracked set below, not every process."
       />
 
       <Card className={cn(dimmed && 'opacity-60')}>
       <CardHeader className="flex-wrap gap-2">
+        {/* Says plainly that this is a sample. It used to read "10 tracked"
+            beside a description promising everything on the machine. */}
         <Badge variant="outline" className="tabular">
-          {rows.length}
-          {query && ` of ${processes.length}`} tracked
+          {query ? `${rows.length} of ${processes.length}` : `top ${processes.length}`}
+          {current.processCount > 0 && ` · ${current.processCount} running`}
         </Badge>
         <div className="relative ml-auto w-full sm:w-auto">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
@@ -180,10 +196,13 @@ const Processes: React.FC = () => {
                           >
                             {proc.cpu.toFixed(1)}%
                           </span>
+                          <span className="text-mute text-2xs tabular ml-1.5" title="percent of one core, as shown by top">
+                            {proc.cpuCore >= 100 ? `${proc.cpuCore.toFixed(0)}%/core` : ''}
+                          </span>
                         </div>
                       </td>
                       <td className="text-mute tabular px-5 py-2.5 text-right font-mono text-2xs">
-                        {proc.memory} MB
+                        {formatMemory(proc)}
                       </td>
                       <td className="px-5 py-2.5">
                         <Badge variant={stateVariant(proc.state)} className="px-2 py-0">

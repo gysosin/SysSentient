@@ -97,7 +97,8 @@ func (s *Store) QueryRange(hostID string, r Range, limit int) ([]models.SystemSt
 		       temperature, top_processes, COALESCE(processes, '[]'),
 		       COALESCE(uptime_seconds, 0), COALESCE(hostname, ''),
 		       COALESCE(filesystems, '[]'), COALESCE(host_id, ''),
-		       COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0)
+		       COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0),
+		       COALESCE(process_count, 0)
 		FROM metrics
 		WHERE timestamp >= ? AND timestamp <= ?`
 	args := []any{sqlTime(r.From), sqlTime(r.To)}
@@ -173,7 +174,7 @@ func scanMetricRows(rows *sql.Rows) ([]models.SystemState, error) {
 			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
 			&m.Temperature, &m.TopProcesses, &processesJSON, &m.UptimeSeconds,
 			&m.Hostname, &filesystemsJSON, &m.HostID,
-			&m.MemoryCached, &m.MemoryBuffers,
+			&m.MemoryCached, &m.MemoryBuffers, &m.ProcessCount,
 		); err != nil {
 			return nil, err
 		}

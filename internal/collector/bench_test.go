@@ -29,11 +29,11 @@ func BenchmarkCollect(b *testing.B) {
 // whose cost scales with how busy the host is, so it is measured separately.
 func BenchmarkGetTopProcesses(b *testing.B) {
 	c := NewCollector(10)
-	_, _ = c.getTopProcesses(10, time.Now())
+	_, _, _ = c.getTopProcesses(10, time.Now())
 
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := c.getTopProcesses(10, time.Now()); err != nil {
+		if _, _, err := c.getTopProcesses(10, time.Now()); err != nil {
 			b.Fatalf("processes: %v", err)
 		}
 	}

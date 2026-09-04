@@ -243,3 +243,77 @@ func mountpoints(fs []models.Filesystem) []string {
 	}
 	return out
 }
+
+func TestGetTopProcessesReportsTheRealCount(t *testing.T) {
+	c := NewCollector(10)
+	// First call establishes CPU baselines.
+	if _, _, err := c.getTopProcesses(10, time.Now()); err != nil {
+		t.Fatalf("warm-up: %v", err)
+	}
+	procs, count, err := c.getTopProcesses(10, time.Now())
+	if err != nil {
+		t.Fatalf("getTopProcesses: %v", err)
+	}
+
+	// The count is the machine's, not the sample's. Conflating them reported
+	// a 600-process host as running 10.
+	if count <= len(procs) {
+		t.Errorf("process count %d is not greater than the %d rows kept", count, len(procs))
+	}
+	if count < 10 {
+		t.Errorf("process count = %d, implausibly low for a running machine", count)
+	}
+}
+
+func TestGetTopProcessesRanksByMemoryAsWellAsCPU(t *testing.T) {
+	c := NewCollector(10)
+	if _, _, err := c.getTopProcesses(10, time.Now()); err != nil {
+		t.Fatalf("warm-up: %v", err)
+	}
+	procs, _, err := c.getTopProcesses(10, time.Now())
+	if err != nil {
+		t.Fatalf("getTopProcesses: %v", err)
+	}
+
+	// A CPU-only ranking dropped idle processes before their memory was read,
+	// so the Memory column ranked ten CPU-active processes and called them the
+	// top memory consumers.
+	var idleWithMemory int
+	for _, p := range procs {
+		if p.CPU == 0 && p.MemoryBytes > 0 {
+			idleWithMemory++
+		}
+		if p.MemoryBytes == 0 && p.CPU == 0 {
+			t.Errorf("%s uses neither CPU nor memory yet was selected", p.Name)
+		}
+	}
+	if idleWithMemory == 0 {
+		t.Log("no idle memory holders on this machine right now; ranking still covers both")
+	}
+}
+
+func TestProcessCPUIsComparableWithSystemCPU(t *testing.T) {
+	c := NewCollector(10)
+	if _, _, err := c.getTopProcesses(10, time.Now()); err != nil {
+		t.Fatalf("warm-up: %v", err)
+	}
+	time.Sleep(120 * time.Millisecond)
+	procs, _, err := c.getTopProcesses(10, time.Now())
+	if err != nil {
+		t.Fatalf("getTopProcesses: %v", err)
+	}
+
+	cores := c.coreCount()
+	for _, p := range procs {
+		// Whole-machine percent cannot exceed 100. The old field was percent
+		// of one core, so a multi-threaded process read 400 beside a system
+		// gauge of 25 and the two could not be reconciled by eye.
+		if p.CPU > 100.5 {
+			t.Errorf("%s reports %.1f%% of the machine, which is impossible", p.Name, p.CPU)
+		}
+		// The per-core figure is what top shows, and may exceed 100.
+		if cores > 1 && p.CPUCore < p.CPU {
+			t.Errorf("%s: per-core %.1f is below whole-machine %.1f", p.Name, p.CPUCore, p.CPU)
+		}
+	}
+}

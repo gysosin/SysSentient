@@ -476,9 +476,12 @@ const Overview: React.FC = () => {
           detail={hosts.length > 1 ? `${hosts.length} agents reporting` : 'single-node install'}
           tone="text-ok"
         />
+        {/* processCount is the machine's real total. This used to show
+            processes.length -- the size of the top-N sample -- so a
+            600-process host reported "10". */}
         <Kpi
           label="Processes"
-          value={loading ? '—' : String(processes.length)}
+          value={loading ? '—' : String(current.processCount || processes.length)}
           detail={triage.length > 0 ? `top consumer ${triage[0].name}` : 'no process data'}
           tone="text-brand"
         />
@@ -628,7 +631,7 @@ const Overview: React.FC = () => {
               title="Process triage"
               action={
                 <span className="text-mute tabular font-mono text-2xs">
-                  {processes.length} running
+                  top {processes.length} of {current.processCount || processes.length}
                 </span>
               }
             />

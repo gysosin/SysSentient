@@ -121,7 +121,9 @@ test('fetchMetricsHistory replaces non-finite process numbers with safe defaults
     name: '?',
     user: '?',
     cpu: 0,
+    cpuCore: 0,
     memory: 0,
+    memoryBytes: 0,
     state: 'Running',
   }]);
 });
