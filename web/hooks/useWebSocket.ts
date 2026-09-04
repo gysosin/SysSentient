@@ -4,6 +4,8 @@ import { normalizeFilesystems, normalizeProcesses } from '../services/normalize'
 import { metricsWebSocketURL } from '../constants';
 
 interface RawMetricsPayload {
+    process_count?: number;
+    host_id?: string;
     hostname?: string;
     timestamp: string;
     cpu_usage?: number;
@@ -125,6 +127,8 @@ export function useWebSocket(): UseWebSocketReturn {
             loadAvg15: payload.load_avg_15 || 0,
             temperature: payload.temperature || 0,
             uptimeSeconds: payload.uptime_seconds || 0,
+            processCount: payload.process_count || 0,
+            hostId: payload.host_id || '',
             filesystems: normalizeFilesystems(payload.filesystems),
         };
     }, []);

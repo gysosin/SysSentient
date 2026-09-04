@@ -2,8 +2,13 @@ export interface Process {
   pid: number;
   name: string;
   user: string;
+  /** Percent of the whole machine, comparable with the system CPU gauge. */
   cpu: number;
+  /** Percent of one core, top's units. Exceeds 100 for a multi-threaded process. */
+  cpuCore: number;
   memory: number; // in MB
+  /** Exact RSS. Whole megabytes render a 700 KB process as "0 MB". */
+  memoryBytes: number;
   state: 'Running' | 'Sleeping' | 'Zombie' | 'Stopped';
 }
 
@@ -19,6 +24,14 @@ export interface Filesystem {
 }
 
 export interface SystemMetrics {
+  /** How many processes are running, not how many are in the top-N sample. */
+  processCount: number;
+  /**
+   * Stable machine identifier. The host switcher selects by id, so filtering
+   * live frames needed this — comparing the id against `hostname` could never
+   * match, which silently emptied the chart whenever a host was selected.
+   */
+  hostId: string;
   hostname: string;
   timestamp: number;
   cpuLoad: number;

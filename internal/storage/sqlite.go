@@ -296,6 +296,7 @@ func migrateSchema(db *sql.DB) error {
 		{"host_id", "TEXT DEFAULT ''"},
 		{"memory_cached", "INTEGER DEFAULT 0"},
 		{"memory_buffers", "INTEGER DEFAULT 0"},
+		{"process_count", "INTEGER DEFAULT 0"},
 	}
 
 	for _, col := range newColumns {
@@ -400,8 +401,8 @@ func saveTx(db execer, m *models.SystemState) error {
 		swap_used, swap_total, disk_read_bytes, disk_write_bytes, disk_iops,
 		net_sent_bytes, net_recv_bytes, load_avg_1, load_avg_5, load_avg_15,
 		temperature, top_processes, processes, uptime_seconds, hostname, filesystems, host_id,
-		memory_cached, memory_buffers
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		memory_cached, memory_buffers, process_count
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err = db.Exec(query,
 		// Stored through one explicit layout. Binding a raw time.Time lets the
@@ -414,7 +415,7 @@ func saveTx(db execer, m *models.SystemState) error {
 		// function of processes, and storing both wrote the same information
 		// twice on every sample. The column stays for rows written earlier.
 		m.Temperature, "", string(processesJSON), m.UptimeSeconds, m.Hostname, string(filesystemsJSON), m.HostID,
-		m.MemoryCached, m.MemoryBuffers,
+		m.MemoryCached, m.MemoryBuffers, m.ProcessCount,
 	)
 	return err
 }
@@ -450,7 +451,7 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 		disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
 		net_sent_bytes, net_recv_bytes, COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
 		temperature, top_processes, COALESCE(processes, '[]'), COALESCE(uptime_seconds, 0), COALESCE(hostname, ''), COALESCE(filesystems, '[]'), COALESCE(host_id, ''),
-		COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0)
+		COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0), COALESCE(process_count, 0)
 		FROM metrics ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
@@ -665,7 +666,7 @@ func (s *Store) GetRecentForHost(hostID string, limit int) ([]models.SystemState
 		net_sent_bytes, net_recv_bytes, COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
 		temperature, top_processes, COALESCE(processes, '[]'), COALESCE(uptime_seconds, 0),
 		COALESCE(hostname, ''), COALESCE(filesystems, '[]'), COALESCE(host_id, ''),
-		COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0)
+		COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0), COALESCE(process_count, 0)
 		FROM metrics WHERE host_id = ? ORDER BY timestamp DESC LIMIT ?`
 
 	rows, err := s.db.Query(query, hostID, limit)

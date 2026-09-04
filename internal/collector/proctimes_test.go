@@ -30,7 +30,7 @@ func TestProcCPUSecondsMatchesGopsutil(t *testing.T) {
 		if err != nil || times == nil {
 			continue
 		}
-		mine, ok := newStatReader().cpuSeconds(pid)
+		mine, _, ok := newStatReader().procStat(pid)
 		if !ok {
 			// A process that exited between the two reads is expected.
 			continue
@@ -68,7 +68,7 @@ func TestProcCPUSecondsHandlesOddProcessNames(t *testing.T) {
 		t.Skip("no /proc")
 	}
 	// Self is guaranteed to exist and to be readable.
-	if _, ok := newStatReader().cpuSeconds(int32(os.Getpid())); !ok {
+	if _, _, ok := newStatReader().procStat(int32(os.Getpid())); !ok {
 		t.Fatal("could not read own /proc stat")
 	}
 }

@@ -8,6 +8,8 @@
 import { Filesystem, Process } from '../types';
 
 export interface RawProcess {
+    cpu_core?: number;
+    memory_bytes?: number;
     pid?: number;
     name?: string;
     user?: string;
@@ -50,7 +52,15 @@ export function normalizeProcess(process: RawProcess): Process {
         name: nonEmptyString(process.name, '?'),
         user: nonEmptyString(process.user, '?'),
         cpu: finiteNumber(process.cpu),
+        // An agent older than these fields sends neither. Falling back keeps
+        // its rows readable instead of rendering every process as 0.
+        cpuCore: process.cpu_core === undefined
+            ? finiteNumber(process.cpu)
+            : finiteNumber(process.cpu_core),
         memory: finiteNumber(process.memory),
+        memoryBytes: process.memory_bytes === undefined
+            ? finiteNumber(process.memory) * 1024 * 1024
+            : finiteNumber(process.memory_bytes),
         state: normalizeProcessState(process.state),
     };
 }

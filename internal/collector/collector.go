@@ -1,7 +1,9 @@
 package collector
 
 import (
+	"cmp"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -55,6 +57,9 @@ type Collector struct {
 	lastCollectTime time.Time
 	lastReadOps     uint64
 	lastWriteOps    uint64
+	// cores caches the logical CPU count, used to convert per-core process
+	// CPU into whole-machine percent.
+	cores int
 }
 
 // NewCollector returns a Collector that records topProcesses processes per
@@ -185,7 +190,7 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 	}
 
 	// 8. Top Processes
-	processes, err := c.getTopProcesses(c.topProcesses, now)
+	processes, processCount, err := c.getTopProcesses(c.topProcesses, now)
 	topProcs := formatTopProcesses(processes)
 	if err != nil {
 		topProcs = "Error collecting processes"
@@ -216,6 +221,7 @@ func (c *Collector) Collect() (*models.SystemState, error) {
 		UptimeSeconds:  uptimeSeconds,
 		TopProcesses:   topProcs,
 		Processes:      processes,
+		ProcessCount:   processCount,
 	}
 
 	return state, nil
@@ -239,19 +245,28 @@ func counterDelta(current, previous uint64) uint64 {
 // hundred processes' worth of syscalls on a busy host to display ten rows.
 // This runs on every tick for the life of the daemon, so it is the single
 // biggest cost in the collector.
-func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process, error) {
+// getTopProcesses returns the busiest processes and how many are running.
+//
+// Ranked by CPU *and* by memory, and the two lists are merged. Ranking by CPU
+// alone -- which this did, with a `cpu > 0.1` gate applied before memory was
+// ever read -- meant an idle process holding 8 GB was dropped before anything
+// looked at its memory, while the dashboard still offered a Memory column and
+// a memory sort. Those ranked ten CPU-active processes by memory and called it
+// the top memory consumers.
+func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process, int, error) {
 	pids, err := process.Pids()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	type candidate struct {
-		pid  int32
-		proc *process.Process
-		cpu  float64
+		pid    int32
+		proc   *process.Process
+		cpu    float64
+		memory uint64
 	}
 
-	candidates := make([]candidate, 0, limit*4)
+	candidates := make([]candidate, 0, len(pids))
 	newCache := make(map[int32]*process.Process, len(pids))
 
 	for _, pid := range pids {
@@ -267,14 +282,18 @@ func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process,
 		// Current CPU, derived from the delta since the previous poll.
 		// p.CPUPercent() is a lifetime average and mis-ranks processes badly:
 		// something that pegged a core an hour ago outranks one busy now.
-		totalSeconds, ok := c.statReader.cpuSeconds(pid)
+		// One read yields both: CPU time and resident memory live in the same
+		// file, so memory for every process costs nothing extra.
+		totalSeconds, memory, ok := c.statReader.procStat(pid)
 		if !ok {
 			continue
 		}
+		cpu := c.processCPUPercent(pid, totalSeconds, now)
 
-		if cpu := c.processCPUPercent(pid, totalSeconds, now); cpu > 0.1 {
-			candidates = append(candidates, candidate{pid: pid, proc: p, cpu: cpu})
-		}
+		// Nothing is filtered out here. A process that is idle now still
+		// belongs in the memory ranking, and one holding no memory still
+		// belongs in the CPU ranking.
+		candidates = append(candidates, candidate{pid: pid, proc: p, cpu: cpu, memory: memory})
 	}
 
 	// Replace cache with new one (implicit pruning of dead procs)
@@ -289,45 +308,86 @@ func (c *Collector) getTopProcesses(limit int, now time.Time) ([]models.Process,
 		}
 	}
 
+	// Union of the two rankings, so both questions are answerable from the
+	// same payload without storing every process.
+	selected := make(map[int32]candidate, limit*2)
+
 	slices.SortFunc(candidates, func(a, b candidate) int {
-		switch {
-		case a.cpu > b.cpu:
-			return -1
-		case a.cpu < b.cpu:
-			return 1
-		default:
-			return 0
-		}
+		return cmp.Compare(b.cpu, a.cpu)
 	})
-	if len(candidates) > limit {
-		candidates = candidates[:limit]
+	for _, cand := range candidates[:min(limit, len(candidates))] {
+		if cand.cpu > 0 {
+			selected[cand.pid] = cand
+		}
+	}
+
+	slices.SortFunc(candidates, func(a, b candidate) int {
+		return cmp.Compare(b.memory, a.memory)
+	})
+	for _, cand := range candidates[:min(limit, len(candidates))] {
+		if cand.memory > 0 {
+			selected[cand.pid] = cand
+		}
 	}
 
 	// Only now, for the handful that will actually be displayed, pay for the
 	// metadata.
-	stats := make([]models.Process, 0, len(candidates))
-	for _, c := range candidates {
-		name, _ := c.proc.Name()
-		username, _ := c.proc.Username()
-		memInfo, _ := c.proc.MemoryInfo()
-		status, _ := c.proc.Status()
+	cores := float64(c.coreCount())
+	stats := make([]models.Process, 0, len(selected))
+	for _, cand := range selected {
+		name, err := cand.proc.Name()
+		if err != nil || name == "" {
+			// The process exited between the scan and here. Reporting it with
+			// an empty name, no user and a default state rendered a dead
+			// process as "Sleeping, 0 MB" beside a real CPU number.
+			continue
+		}
+		username, _ := cand.proc.Username()
+		status, _ := cand.proc.Status()
 
-		memoryMB := uint64(0)
-		if memInfo != nil {
-			memoryMB = memInfo.RSS / 1024 / 1024
+		machineCPU := cand.cpu
+		if cores > 0 {
+			machineCPU = cand.cpu / cores
 		}
 
 		stats = append(stats, models.Process{
-			PID:    c.pid,
-			Name:   compactProcessName(name),
-			User:   username,
-			CPU:    c.cpu,
-			Memory: memoryMB,
-			State:  normalizeProcessState(status),
+			PID:  cand.pid,
+			Name: compactProcessName(name),
+			User: username,
+			// Rounded: the raw value carried seventeen significant digits into
+			// the database and the API for no one's benefit.
+			CPU:         math.Round(machineCPU*100) / 100,
+			CPUCore:     math.Round(cand.cpu*100) / 100,
+			Memory:      cand.memory / (1024 * 1024),
+			MemoryBytes: cand.memory,
+			State:       normalizeProcessState(status),
 		})
 	}
 
-	return stats, nil
+	// Deterministic order for the transport: busiest first.
+	slices.SortFunc(stats, func(a, b models.Process) int {
+		if n := cmp.Compare(b.CPU, a.CPU); n != 0 {
+			return n
+		}
+		return cmp.Compare(b.MemoryBytes, a.MemoryBytes)
+	})
+
+	return stats, len(pids), nil
+}
+
+// coreCount reports the number of logical CPUs, cached after the first call.
+//
+// Used to convert per-core process CPU into whole-machine percent so the
+// number is comparable with the system gauge beside it.
+func (c *Collector) coreCount() int {
+	if c.cores == 0 {
+		if n, err := cpu.Counts(true); err == nil && n > 0 {
+			c.cores = n
+		} else {
+			c.cores = 1
+		}
+	}
+	return c.cores
 }
 
 func formatTopProcesses(processes []models.Process) string {

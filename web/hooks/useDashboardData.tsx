@@ -29,6 +29,8 @@ const STALE_AFTER_MS = REFRESH_RATE_MS * 5;
 const MAX_HISTORY = 120;
 
 export const EMPTY_METRIC: SystemMetrics = {
+  processCount: 0,
+  hostId: '',
   hostname: '',
   timestamp: 0,
   cpuLoad: 0,
@@ -140,7 +142,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // The socket streams the server's own view. When a specific host is
     // selected, only its samples belong on screen.
     const incoming = selectedHost
-      ? wsMetricsHistory.filter((m) => m.hostname === selectedHost || m.hostname === '')
+      ? wsMetricsHistory.filter((m) => m.hostId === selectedHost || m.hostId === '')
       : wsMetricsHistory;
     if (incoming.length === 0) return;
 

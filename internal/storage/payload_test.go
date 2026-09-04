@@ -185,3 +185,35 @@ func TestUnmarshalFilesystemsToleratesCorruptValue(t *testing.T) {
 		t.Error("nil input returned a nil slice; callers expect an empty one")
 	}
 }
+
+func TestProcessCountSurvivesARoundTrip(t *testing.T) {
+	s := newAgentStore(t)
+	sample := sampleWithPayload()
+	// The machine has hundreds of processes; only a handful are kept for the
+	// drill-down. Reporting len(Processes) as the count told operators a
+	// 600-process host was running 10.
+	sample.ProcessCount = 626
+
+	if err := s.Save(sample); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := s.GetRecent(1)
+	if err != nil {
+		t.Fatalf("GetRecent: %v", err)
+	}
+	if got[0].ProcessCount != 626 {
+		t.Errorf("ProcessCount = %d, want 626", got[0].ProcessCount)
+	}
+	if len(got[0].Processes) == 626 {
+		t.Error("the count and the sample size are the same value; they must be independent")
+	}
+
+	// And through the range reader, which uses the same scanner.
+	ranged, err := s.QueryRange("", Range{From: time.Now().Add(-time.Hour), To: time.Now().Add(time.Hour)}, 10)
+	if err != nil {
+		t.Fatalf("QueryRange: %v", err)
+	}
+	if len(ranged) == 0 || ranged[0].ProcessCount != 626 {
+		t.Errorf("range read lost the process count")
+	}
+}

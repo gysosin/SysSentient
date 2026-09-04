@@ -30,6 +30,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [22](22-service-install.md) | `service install` for systemd, launchd and Windows | done |
 | [23](23-server-mode-maintenance.md) | Make server mode a first-class citizen | done |
 | [24](24-time-range-queries.md) | Time-range query engine | done |
+| [27](27-process-accuracy.md) | Make processes true | done |
 
 ## Working agreement
 

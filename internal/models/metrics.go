@@ -39,6 +39,11 @@ type SystemState struct {
 	// fabricated this from a client-side page-load counter that reset on refresh.
 	TopProcesses string    `json:"top_processes"` // Human readable summary of top processes
 	Processes    []Process `json:"processes"`     // Structured top processes
+	// ProcessCount is how many processes are running, which is not the same as
+	// len(Processes) -- that is only the top handful kept for the drill-down.
+	// Reporting the latter as the former told operators a 600-process machine
+	// was running 10.
+	ProcessCount int `json:"process_count"`
 	// Filesystems reports capacity per mounted filesystem. Without this the
 	// product cannot detect a full disk — the most common outage cause.
 	Filesystems []Filesystem `json:"filesystems"`
@@ -57,12 +62,24 @@ type Filesystem struct {
 }
 
 type Process struct {
-	PID    int32   `json:"pid"`
-	Name   string  `json:"name"`
-	User   string  `json:"user"`
-	CPU    float64 `json:"cpu"`
-	Memory uint64  `json:"memory"` // Resident memory in MB
-	State  string  `json:"state"`
+	PID  int32  `json:"pid"`
+	Name string `json:"name"`
+	User string `json:"user"`
+	// CPU is percent of the whole machine, so it is directly comparable with
+	// the system CPU figure shown beside it. It used to be percent of a single
+	// core, which meant a process could read 400% next to a system total of
+	// 25% and the two numbers could not be reconciled by eye.
+	CPU float64 `json:"cpu"`
+	// CPUCore is the same measurement in top's units: percent of one core,
+	// which exceeds 100 for a multi-threaded process. Kept because it is what
+	// an operator sees in top and htop.
+	CPUCore float64 `json:"cpu_core"`
+	// Memory is resident set size in whole MB, retained for compatibility.
+	Memory uint64 `json:"memory"`
+	// MemoryBytes is the exact RSS. Whole megabytes round a 700 KB process
+	// down to "0 MB", which reads as a bug.
+	MemoryBytes uint64 `json:"memory_bytes"`
+	State       string `json:"state"`
 }
 
 type AIAction struct {

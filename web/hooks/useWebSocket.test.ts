@@ -91,7 +91,11 @@ describe('useWebSocket exposes processes from the live socket', () => {
       name: 'chrome',
       user: 'xyfo',
       cpu: 12.5,
+      // An agent that predates these fields sends neither, so they fall back
+      // to the values it does send rather than rendering as zero.
+      cpuCore: 12.5,
       memory: 512,
+      memoryBytes: 512 * 1024 * 1024,
       state: 'Running',
     });
     assert.equal(result.current.processes[1].state, 'Sleeping');
@@ -117,7 +121,9 @@ describe('useWebSocket exposes processes from the live socket', () => {
       name: '?',
       user: '?',
       cpu: 0,
+      cpuCore: 0,
       memory: 0,
+      memoryBytes: 0,
       state: 'Running',
     });
   });
