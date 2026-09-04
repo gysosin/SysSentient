@@ -58,6 +58,11 @@ type DatabaseConfig struct {
 	MinuteRollupDays       int `mapstructure:"minute_rollup_days"`
 	FiveMinuteRollupDays   int `mapstructure:"five_minute_rollup_days"`
 	InsightsRetentionHours int `mapstructure:"insights_retention_hours"`
+	// ArchivePath sends aged-out rollups to compressed files instead of
+	// deleting them. Empty disables archiving, which is the historical
+	// behaviour: retention alone. Retention decides what the dashboard can
+	// query; archiving decides whether anything older still exists.
+	ArchivePath string `mapstructure:"archive_path"`
 }
 
 type GeminiConfig struct {
@@ -162,6 +167,7 @@ func LoadConfig(path string) (*Config, error) {
 	v.SetDefault("database.metrics_retention_hours", 24)
 	v.SetDefault("database.minute_rollup_days", 30)
 	v.SetDefault("database.five_minute_rollup_days", 365)
+	v.SetDefault("database.archive_path", "")
 	v.SetDefault("database.insights_retention_hours", 7*24)
 	v.SetDefault("gemini.api_key", "") // Ensure env var is picked up
 	v.SetDefault("gemini.model_name", "gemini-2.5-flash-lite")

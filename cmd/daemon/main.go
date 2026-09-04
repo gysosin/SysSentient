@@ -49,6 +49,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	configPath := flag.String("config", "", "path to config file (default: ./config.yaml or /etc/sys-sentient)")
 	backupTo := flag.String("backup", "", "write a consistent copy of the database to this path and exit")
+	restoreFrom := flag.String("restore-archive", "", "load an archived tier back into the database and exit")
 	flag.Parse()
 
 	if *showVersion {
@@ -104,6 +105,21 @@ func main() {
 	if err != nil {
 		logger.Error("failed to initialize storage", "error", err)
 		os.Exit(1)
+	}
+
+	// Restoring is deliberately a one-shot command rather than an automatic
+	// step: bringing archived history back is an operator's decision about
+	// which archive and when, not something a daemon should guess at boot.
+	if *restoreFrom != "" {
+		rows, rerr := store.RestoreArchive(*restoreFrom)
+		if rerr != nil {
+			logger.Error("restore failed", "archive", *restoreFrom, "error", rerr)
+			_ = store.Close()
+			os.Exit(1)
+		}
+		logger.Info("archive restored", "archive", *restoreFrom, "rows", rows)
+		_ = store.Close()
+		return
 	}
 	defer func() {
 		if err := store.Close(); err != nil {
@@ -168,7 +184,7 @@ func main() {
 		logger.Error("could not load stored alert rule changes", "error", err)
 	}
 
-	maint := newMaintenance(store, runtime, cfg.Database.InsightsRetentionHours, logger)
+	maint := newMaintenance(store, runtime, cfg.Database.InsightsRetentionHours, cfg.Database.ArchivePath, logger)
 	// Once at boot, so a restart does not leave the database untended for an
 	// hour and a fresh install has queryable tiers as soon as data ages in.
 	maint.runOnStart(time.Now())

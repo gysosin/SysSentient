@@ -65,7 +65,7 @@ func maintenanceFixture(t *testing.T) (*maintenance, *storage.Store, string) {
 		Collector: config.CollectorConfig{PollIntervalSeconds: 2},
 		Logging:   config.LoggingConfig{Level: "info", Format: "text"},
 	}
-	runner := newMaintenance(store, config.NewRuntime(cfg), cfg.Database.InsightsRetentionHours, quietLogger())
+	runner := newMaintenance(store, config.NewRuntime(cfg), cfg.Database.InsightsRetentionHours, "", quietLogger())
 	return runner, store, path
 }
 

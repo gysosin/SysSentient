@@ -40,6 +40,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [32](32-ai-assistant.md) | Agentic AI assistant | done |
 | [33](33-mcp-server.md) | MCP server | done |
 | [34](34-packaging-polish.md) | One package, for people who don't live in a terminal | done |
+| [35](35-archiving.md) | Archiving, so the disk does not fill | done |
 
 ## Working agreement
 

@@ -32,7 +32,10 @@ type maintenance struct {
 	// insightsRetentionHours also governs alert events, which have no
 	// retention setting of their own.
 	insightsRetentionHours int
-	logger                 *slog.Logger
+	// archivePath, when set, keeps aged-out rollups as compressed files
+	// instead of deleting them.
+	archivePath string
+	logger      *slog.Logger
 
 	// interval is how often run should be called. Carried here so the loops
 	// that drive it, and the tests that exercise those loops, agree on one
@@ -49,12 +52,14 @@ func newMaintenance(
 	store *storage.Store,
 	runtime *config.Runtime,
 	insightsRetentionHours int,
+	archivePath string,
 	logger *slog.Logger,
 ) *maintenance {
 	return &maintenance{
 		store:                  store,
 		runtime:                runtime,
 		insightsRetentionHours: insightsRetentionHours,
+		archivePath:            archivePath,
 		logger:                 logger,
 		interval:               maintenanceInterval,
 	}
@@ -93,8 +98,13 @@ func (m *maintenance) run(now time.Time) {
 	// for the same reason.
 	if err := m.store.Rollup(policy, now); err != nil {
 		m.logger.Error("error rolling up metrics", "error", err)
-	} else if err := m.store.PruneTiers(policy, now); err != nil {
-		m.logger.Error("error pruning metric tiers", "error", err)
+	} else {
+		// Archive before pruning, for the same reason the rollup runs before
+		// the raw prune: PruneTiers deletes the rows the archive would keep.
+		m.archive(policy, now)
+		if err := m.store.PruneTiers(policy, now); err != nil {
+			m.logger.Error("error pruning metric tiers", "error", err)
+		}
 	}
 
 	if err := m.store.PruneOldInsights(m.insightsRetentionHours); err != nil {
@@ -121,5 +131,35 @@ func (m *maintenance) run(now time.Time) {
 	}
 	if vacuum {
 		m.vacuumsRun++
+	}
+}
+
+// archive keeps rows that are about to age out, when a destination is set.
+//
+// A failure is logged and pruning still runs: an unwritable archive directory
+// must not stop retention, or the disk fills with the very data archiving was
+// configured to move off it.
+func (m *maintenance) archive(policy storage.RetentionPolicy, now time.Time) {
+	if m.archivePath == "" {
+		return
+	}
+	for _, tier := range []struct {
+		resolution string
+		before     time.Time
+	}{
+		{storage.RollupMinute, now.AddDate(0, 0, -policy.MinuteDays)},
+		{storage.RollupFiveMinute, now.AddDate(0, 0, -policy.FiveMinuteDays)},
+	} {
+		res, err := m.store.ArchiveTier(tier.resolution, m.archivePath, tier.before)
+		if err != nil {
+			m.logger.Error("error archiving metric tier",
+				"resolution", tier.resolution, "error", err)
+			continue
+		}
+		if res.Rows > 0 {
+			m.logger.Info("archived metric tier",
+				"resolution", tier.resolution, "rows", res.Rows,
+				"bytes", res.Bytes, "path", res.Path)
+		}
 	}
 }

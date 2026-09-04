@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Archiving.** Retention only ever deleted: raw for a day, one-minute for a
+  month, five-minute for a year, then gone. Setting `database.archive_path`
+  now keeps aged-out rollups as compressed JSON-lines files instead, and
+  `sys-sentient --restore-archive <file>` brings them back. The archive is
+  written and fsynced *before* anything is deleted, and restore is idempotent.
+  Measured on sixty days of samples: the database went from 8.25 MB to 299 KB —
+  **96.4% smaller** — with the archive itself 3.7 KB. Off by default.
+
+### Added
+
 - **A first run you cannot miss.** The one thing a new user must do — read a
   setup token and open a URL — was logged as a single structured line among a
   dozen others at startup. It is now printed in a box on a real terminal, and
