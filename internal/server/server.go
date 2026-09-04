@@ -279,24 +279,51 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	// ?host= scopes to one machine; omitted returns every host, which keeps
-	// single-node deployments working unchanged.
-	hostID := r.URL.Query().Get("host")
-
-	limit := defaultMetricsLimit
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= maxMetricsLimit {
-			limit = parsed
-		}
-	}
-
-	metrics, err := s.store.GetRecentForHost(hostID, limit)
+	now := time.Now()
+	q, err := parseRangeQuery(r, s.rawRetention(), now)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
+		// A mistyped parameter used to fall back to "the newest 50 samples",
+		// which returns the wrong answer while looking like it worked.
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Unbounded: the historical "newest N" reply, unchanged for existing
+	// clients and for the live dashboard, which only ever wants the tail.
+	if !q.Bounded {
+		limit := q.Limit
+		if limit == 0 {
+			limit = defaultMetricsLimit
+		}
+		metrics, err := s.store.GetRecentForHost(q.HostID, limit)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
+			return
+		}
+		setProtectedJSONHeaders(w)
+		writeJSONBody(w, metrics)
+		return
+	}
+
+	resp := rangeResponse{Resolution: q.Resolution, From: q.Range.From, To: q.Range.To}
+	if q.Resolution == storage.ResolutionRaw {
+		metrics, err := s.store.QueryRange(q.HostID, q.Range, q.Limit)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
+			return
+		}
+		resp.Metrics, resp.Count = metrics, len(metrics)
+	} else {
+		points, err := s.store.GetRollupsRange(q.Resolution, q.HostID, q.Range, q.Limit)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
+			return
+		}
+		resp.Metrics, resp.Count = points, len(points)
+	}
+
 	setProtectedJSONHeaders(w)
-	writeJSONBody(w, metrics)
+	writeJSONBody(w, resp)
 }
 
 func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {

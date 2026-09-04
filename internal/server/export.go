@@ -64,14 +64,32 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		limit = min(parsed, maxExportRows)
 	}
 
+	// An upper bound, so a window can be exported rather than only an
+	// open-ended tail. Absent means "up to now", which is what callers who
+	// only pass since already expect.
+	until := time.Now()
+	if raw := q.Get("until"); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			http.Error(w, "until must be an RFC3339 timestamp", http.StatusBadRequest)
+			return
+		}
+		until = parsed
+	}
+	if until.Before(since) {
+		http.Error(w, "until is before since", http.StatusBadRequest)
+		return
+	}
+	window := storage.Range{From: since, To: until}
+
 	hostID := q.Get("host")
 
-	if resolution == "raw" {
-		s.exportRaw(w, format, hostID, limit)
+	if resolution == storage.ResolutionRaw {
+		s.exportRaw(w, format, hostID, window, limit)
 		return
 	}
 
-	points, err := s.store.GetRollups(resolution, hostID, since, limit)
+	points, err := s.store.GetRollupsRange(resolution, hostID, window, limit)
 	if err != nil {
 		http.Error(w, "failed to read history", http.StatusInternalServerError)
 		return
@@ -113,8 +131,12 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) exportRaw(w http.ResponseWriter, format, hostID string, limit int) {
-	samples, err := s.store.GetRecentForHost(hostID, limit)
+// exportRaw streams unaggregated samples for a window.
+//
+// It used to ignore the window entirely and return the newest N samples, so
+// asking for last Tuesday quietly gave you today.
+func (s *Server) exportRaw(w http.ResponseWriter, format, hostID string, window storage.Range, limit int) {
+	samples, err := s.store.QueryRange(hostID, window, limit)
 	if err != nil {
 		http.Error(w, "failed to read samples", http.StatusInternalServerError)
 		return

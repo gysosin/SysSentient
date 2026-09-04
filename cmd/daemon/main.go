@@ -162,6 +162,9 @@ func main() {
 	srv.SetRuntime(runtime)
 
 	maint := newMaintenance(store, runtime, cfg.Database.InsightsRetentionHours, logger)
+	// Once at boot, so a restart does not leave the database untended for an
+	// hour and a fresh install has queryable tiers as soon as data ages in.
+	maint.runOnStart(time.Now())
 
 	if cfg.Mode == config.ModeServer {
 		logger.Info("running in server mode: not collecting locally, waiting for agents to push to /api/ingest")

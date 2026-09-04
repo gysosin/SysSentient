@@ -200,51 +200,6 @@ type RollupPoint struct {
 	TempMax     float64   `json:"temperature_max"`
 }
 
-// GetRollups returns aggregated history for a resolution and time range.
-func (s *Store) GetRollups(resolution, hostID string, since time.Time, limit int) ([]RollupPoint, error) {
-	if limit <= 0 {
-		limit = 1000
-	}
-
-	query := `
-		SELECT bucket, resolution, host_id, samples,
-		       COALESCE(cpu_avg,0), COALESCE(cpu_max,0),
-		       COALESCE(memory_used_avg,0), COALESCE(memory_total,0),
-		       COALESCE(swap_used_avg,0),
-		       COALESCE(load_avg_1,0), COALESCE(load_max_1,0),
-		       COALESCE(disk_read_avg,0), COALESCE(disk_write_avg,0),
-		       COALESCE(net_sent_avg,0), COALESCE(net_recv_avg,0),
-		       COALESCE(temperature_avg,0), COALESCE(temperature_max,0)
-		FROM metric_rollups
-		WHERE resolution = ? AND bucket >= ?`
-	args := []any{resolution, sqlTime(since)}
-	if hostID != "" {
-		query += ` AND host_id = ?`
-		args = append(args, hostID)
-	}
-	query += ` ORDER BY bucket ASC LIMIT ?`
-	args = append(args, limit)
-
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	points := make([]RollupPoint, 0, 64)
-	for rows.Next() {
-		var p RollupPoint
-		if err := rows.Scan(&p.Bucket, &p.Resolution, &p.HostID, &p.Samples,
-			&p.CPUAvg, &p.CPUMax, &p.MemoryUsed, &p.MemoryTotal, &p.SwapUsed,
-			&p.LoadAvg1, &p.LoadMax1, &p.DiskRead, &p.DiskWrite,
-			&p.NetSent, &p.NetRecv, &p.Temperature, &p.TempMax); err != nil {
-			return nil, err
-		}
-		points = append(points, p)
-	}
-	return points, rows.Err()
-}
-
 // Compact reclaims space after pruning.
 //
 // Two separate problems, both previously unaddressed.

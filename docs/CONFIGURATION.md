@@ -91,3 +91,22 @@ warns at start-up that nobody will be told.
 
 Nothing leaves the machine unless `gemini.api_key` is set. See
 [PRIVACY.md](PRIVACY.md).
+
+## Querying history
+
+`GET /api/metrics` answers a window as well as a tail:
+
+| Parameter | Meaning |
+|---|---|
+| `from`, `to` | RFC3339 bounds. `from` alone means "until now". URL-encode the `+` in a UTC offset. |
+| `resolution` | `auto` (default), `raw`, `1m`, `5m`. `auto` picks a tier from the window's age and width. |
+| `limit` | Positive integer, capped. Invalid values are rejected, not defaulted. |
+| `host` | Scope to one machine; omit for all. |
+
+A bounded query returns `{resolution, from, to, count, metrics}` — the
+resolution is echoed because `auto` resolves server-side, and a chart needs to
+know whether it is drawing samples or averages. Without `from`, the endpoint
+returns the historical bare array of the newest samples.
+
+`GET /api/export` takes the same window as `since` and `until`, plus `format`
+(`json`/`csv`).

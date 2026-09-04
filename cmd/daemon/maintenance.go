@@ -60,6 +60,17 @@ func newMaintenance(
 	}
 }
 
+// runOnStart performs the first pass immediately.
+//
+// The hourly ticker alone means a restarted daemon does no upkeep for an hour,
+// and a fresh install has empty rollup tiers until one fires -- so /api/export
+// and any historical query return nothing all that time, which reads as a
+// broken feature rather than a young one.
+func (m *maintenance) runOnStart(now time.Time) {
+	m.logger.Debug("running startup maintenance")
+	m.run(now)
+}
+
 // run performs one maintenance pass.
 //
 // Every step is independent: a failure is logged and the rest still run, so one

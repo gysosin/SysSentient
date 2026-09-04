@@ -7,6 +7,29 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **The API can be asked about the past.** `GET /api/metrics` now takes `from`,
+  `to`, `resolution` (`auto`/`raw`/`1m`/`5m`) and a validated `limit`, choosing
+  a storage tier from the window's age and width — so a month-long query is
+  answered from five-minute rollups instead of scanning millions of raw rows.
+  Without a window the endpoint returns exactly what it always did.
+- `/api/export` accepts `until`, so a window can be exported rather than only
+  an open-ended tail.
+
+### Fixed
+
+- **Raw exports ignored `since`**, returning the newest N samples regardless of
+  the window asked for — so exporting last Tuesday quietly gave you today.
+- An invalid `limit` on `/api/metrics` silently became 50. Bad parameters now
+  return 400 with a message naming the problem, instead of returning the wrong
+  answer while looking like they worked.
+- An unencoded `+` in an RFC3339 UTC offset arrives as a space, so a correct
+  timestamp pasted into curl failed to parse. The sign is restored.
+- Maintenance now runs once at startup, so a restarted daemon does not leave the
+  database untended for an hour and a fresh install gets queryable rollup tiers
+  as soon as samples age in.
+
 ### Fixed
 
 - **Server mode was destroying the history it promised to keep.** The fleet
