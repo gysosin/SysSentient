@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -197,5 +198,86 @@ func TestPruneExpiredJoinTokens(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("pruned = %d, want 1", n)
+	}
+}
+
+func TestAlertEventsCarryHostID(t *testing.T) {
+	s := newAgentStore(t)
+	now := time.Now()
+
+	// Two machines that share a hostname — the case that made alerts render as
+	// indistinguishable duplicates.
+	for _, hostID := range []string{"host-a", "host-b"} {
+		if err := s.SaveAlertEvent(AlertEvent{
+			OccurredAt: now, RuleID: "cpu-high", RuleName: "CPU sustained high",
+			Metric: "cpu_usage", State: "firing", Severity: "warning",
+			Value: 95, Threshold: 90, Hostname: "fedora", HostID: hostID,
+		}); err != nil {
+			t.Fatalf("SaveAlertEvent(%s): %v", hostID, err)
+		}
+	}
+
+	events, err := s.GetRecentAlertEvents(10)
+	if err != nil {
+		t.Fatalf("GetRecentAlertEvents: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("got %d events, want 2", len(events))
+	}
+
+	seen := map[string]bool{}
+	for _, e := range events {
+		if e.HostID == "" {
+			t.Errorf("event for %q has no host id", e.Hostname)
+		}
+		seen[e.HostID] = true
+	}
+	if !seen["host-a"] || !seen["host-b"] {
+		t.Errorf("host ids not distinguishable: %v", seen)
+	}
+}
+
+func TestAlertEventsMigrateAnOlderDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+
+	// A database written before host_id existed.
+	legacy, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := legacy.Exec(`
+		CREATE TABLE alert_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			occurred_at DATETIME NOT NULL,
+			rule_id TEXT NOT NULL, rule_name TEXT NOT NULL, metric TEXT NOT NULL,
+			state TEXT NOT NULL, severity TEXT NOT NULL,
+			value REAL NOT NULL, threshold REAL NOT NULL,
+			hostname TEXT NOT NULL DEFAULT ''
+		);
+		INSERT INTO alert_events (occurred_at, rule_id, rule_name, metric, state, severity, value, threshold, hostname)
+		VALUES ('2026-09-01 10:00:00.000','cpu-high','CPU','cpu_usage','firing','warning',95,90,'old-host');`); err != nil {
+		t.Fatalf("seed legacy schema: %v", err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore on a legacy database: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	events, err := store.GetRecentAlertEvents(10)
+	if err != nil {
+		t.Fatalf("GetRecentAlertEvents: %v", err)
+	}
+	// The pre-existing row must survive the migration, with an empty host id
+	// rather than a failed read.
+	if len(events) != 1 {
+		t.Fatalf("got %d events after migration, want 1", len(events))
+	}
+	if events[0].Hostname != "old-host" || events[0].HostID != "" {
+		t.Errorf("migrated row = %+v, want hostname old-host and an empty host id", events[0])
 	}
 }

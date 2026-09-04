@@ -123,7 +123,14 @@ func main() {
 	}
 
 	// 4. Alerting
-	evaluator := alerting.NewEvaluator(alerting.DefaultRules())
+	// Built only when alerting is on. The ingest path had no enabled check of
+	// its own, so a fleet server evaluated, stored and dispatched alerts even
+	// with alerting.enabled false; gating construction covers every caller
+	// rather than relying on each one to remember.
+	var evaluator *alerting.Evaluator
+	if cfg.Alerting.Enabled {
+		evaluator = alerting.NewEvaluator(alerting.DefaultRules())
+	}
 	notifiers := alerting.BuildNotifiers(cfg.Alerting.WebhookURL, cfg.Alerting.SlackWebhookURL)
 	dispatcher := alerting.NewDispatcher(slog.Default(), notifiers...)
 	if cfg.Alerting.Enabled && !dispatcher.Enabled() {
@@ -143,9 +150,22 @@ func main() {
 		close(serverErr)
 	}()
 
+	// Live settings, built before the mode branch so a server-mode daemon has
+	// them too. It previously did not, which made GET/PATCH /api/settings
+	// return 404 on exactly the deployment an operator is most likely to be
+	// tuning remotely.
+	runtime := config.NewRuntime(cfg)
+	runtime.OnLogLevelChange(func(level string) {
+		logging.SetLevel(level)
+		logger.Info("log level changed", "level", level)
+	})
+	srv.SetRuntime(runtime)
+
+	maint := newMaintenance(store, runtime, cfg.Database.InsightsRetentionHours, logger)
+
 	if cfg.Mode == config.ModeServer {
 		logger.Info("running in server mode: not collecting locally, waiting for agents to push to /api/ingest")
-		runServerOnly(ctx, cfg, logger, srv, store, serverErr)
+		runServerOnly(ctx, logger, srv, maint, serverErr)
 		return
 	}
 
@@ -166,23 +186,17 @@ func main() {
 		interval = 2 * time.Second
 	}
 	logger.Info("collector started", "interval", interval)
-	// Live settings. Changing the poll interval retimes this ticker in place
-	// rather than requiring a restart, which is what the setting is for.
-	runtime := config.NewRuntime(cfg)
+	// Changing the poll interval retimes this ticker in place rather than
+	// requiring a restart, which is what the setting is for.
 	ticker := time.NewTicker(interval)
 	runtime.OnPollIntervalChange(func(d time.Duration) {
 		ticker.Reset(d)
 		logger.Info("collector poll interval changed", "interval", d)
 	})
-	runtime.OnLogLevelChange(func(level string) {
-		logging.SetLevel(level)
-		logger.Info("log level changed", "level", level)
-	})
-	srv.SetRuntime(runtime)
 	defer ticker.Stop()
 
 	// Database Maintenance Ticker (Every 1 hour)
-	dbTicker := time.NewTicker(1 * time.Hour)
+	dbTicker := time.NewTicker(maint.interval)
 	defer dbTicker.Stop()
 
 	// Analysis Cooldown
@@ -191,10 +205,6 @@ func main() {
 
 	// last_seen only needs to be fresh enough to answer "is this host
 	// reporting", not accurate to the individual sample.
-	// The maintenance tick fires hourly, so 24 ticks is a daily VACUUM.
-	const vacuumEveryNTicks = 24
-	maintenanceTicks := 0
-
 	const hostUpsertInterval = 30 * time.Second
 	var lastHostUpsert time.Time
 
@@ -216,39 +226,7 @@ func main() {
 			return
 
 		case <-dbTicker.C:
-			// Roll up before pruning, never after: PruneTiers deletes the raw
-			// samples the rollup reads, so reversing these two loses the
-			// history permanently rather than aggregating it.
-			rawHours, minuteDays, fiveMinuteDays := runtime.Retention()
-			policy := storage.RetentionPolicy{
-				RawHours:       rawHours,
-				MinuteDays:     minuteDays,
-				FiveMinuteDays: fiveMinuteDays,
-			}
-			if err := store.Rollup(policy, time.Now()); err != nil {
-				logger.Error("error rolling up metrics", "error", err)
-			} else if err := store.PruneTiers(policy, time.Now()); err != nil {
-				logger.Error("error pruning metric tiers", "error", err)
-			}
-			if err := store.PruneOldInsights(cfg.Database.InsightsRetentionHours); err != nil {
-				logger.Error("error pruning old insights", "error", err)
-			}
-			if err := store.PruneOldAlertEvents(cfg.Database.InsightsRetentionHours); err != nil {
-				logger.Error("error pruning old alert events", "error", err)
-			}
-			if _, err := store.PruneExpiredSessions(time.Now()); err != nil {
-				logger.Error("error pruning expired sessions", "error", err)
-			}
-
-			// Reclaim what the deletes above freed. VACUUM takes an exclusive
-			// lock and rewrites the file, so it runs daily rather than on
-			// every maintenance tick; the checkpoint is cheap and runs each
-			// time, because under continuous writes the WAL otherwise grows
-			// past the database it belongs to.
-			maintenanceTicks++
-			if err := store.Compact(maintenanceTicks%vacuumEveryNTicks == 0); err != nil {
-				logger.Warn("error compacting database", "error", err)
-			}
+			maint.run(time.Now())
 
 		case <-ticker.C:
 			// Collect
@@ -320,6 +298,7 @@ func main() {
 						Value:      transition.Value,
 						Threshold:  transition.Threshold,
 						Hostname:   transition.Hostname,
+						HostID:     transition.HostID,
 					}); err != nil {
 						logger.Error("error saving alert event", "error", err)
 					}
@@ -407,16 +386,17 @@ func compactLogText(value string, maxLength int) string {
 }
 
 // runServerOnly serves the API and dashboard without collecting from the local
-// machine. Retention still runs, because the server owns the fleet's data.
+// machine. It performs exactly the same database maintenance as every other
+// mode — rollup, tier pruning and compaction included — because the server owns
+// the fleet's data and is the deployment with the most of it to lose.
 func runServerOnly(
 	ctx context.Context,
-	cfg *config.Config,
 	logger *slog.Logger,
 	srv *server.Server,
-	store *storage.Store,
+	maint *maintenance,
 	serverErr <-chan error,
 ) {
-	dbTicker := time.NewTicker(1 * time.Hour)
+	dbTicker := time.NewTicker(maint.interval)
 	defer dbTicker.Stop()
 
 	for {
@@ -437,18 +417,7 @@ func runServerOnly(
 			return
 
 		case <-dbTicker.C:
-			if err := store.PruneOldMetrics(cfg.Database.MetricsRetentionHours); err != nil {
-				logger.Error("error pruning old metrics", "error", err)
-			}
-			if err := store.PruneOldInsights(cfg.Database.InsightsRetentionHours); err != nil {
-				logger.Error("error pruning old insights", "error", err)
-			}
-			if err := store.PruneOldAlertEvents(cfg.Database.InsightsRetentionHours); err != nil {
-				logger.Error("error pruning old alert events", "error", err)
-			}
-			if _, err := store.PruneExpiredSessions(time.Now()); err != nil {
-				logger.Error("error pruning expired sessions", "error", err)
-			}
+			maint.run(time.Now())
 		}
 	}
 }

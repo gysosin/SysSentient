@@ -132,6 +132,22 @@ Agents push over HTTPS. Point `agent.ca_cert_path` at your CA if the server
 uses a private one. `agent.insecure_skip_verify` exists as a last resort and
 warns loudly; it defeats the point of using HTTPS at all.
 
+## Retention in a fleet
+
+The server performs the same database maintenance as a single-machine install:
+raw samples are rolled up into the 1-minute and 5-minute tiers *before* the raw
+tier is pruned, and the file is checkpointed hourly and vacuumed daily.
+
+Until recently it did not — a server pruned raw metrics without rolling them up,
+so history past `metrics_retention_hours` was deleted rather than aggregated and
+the long tiers stayed empty. If you ran a server build from before this fix,
+data older than that window is gone and cannot be recovered; the tiers will
+refill from the point of upgrade onward.
+
+Note that on any fresh install the rollup tiers are legitimately empty until the
+first samples age out of the raw window, because the rollup only aggregates what
+is about to be pruned.
+
 ## Current limits
 
 A host is registered on first contact with no approval step. A join token is
