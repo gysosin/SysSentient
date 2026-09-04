@@ -10,13 +10,14 @@ import {
 import {
   fetchActiveAlerts,
   fetchHosts,
-  fetchLatestInsight,
+  fetchInsightHistory,
+  type InsightEntry,
   fetchMetricsHistory,
   fetchRecentLogs,
   triggerAnalysis,
 } from '../services/api';
 import { useWebSocket } from './useWebSocket';
-import { LOG_REFRESH_RATE_MS, REFRESH_RATE_MS } from '../constants';
+import { INSIGHT_REFRESH_RATE_MS, LOG_REFRESH_RATE_MS, REFRESH_RATE_MS } from '../constants';
 
 // A feed is stale once it has missed several poll intervals. This is what makes
 // a half-open socket visible: the badge can read LIVE while no frame has
@@ -73,6 +74,8 @@ interface DashboardData {
   toggleFreeze: () => void;
   ai: {
     result: AIAnalysisResult | null;
+    /** Every stored analysis, newest first. */
+    history: InsightEntry[];
     loading: boolean;
     error: string | null;
     run: () => Promise<void>;
@@ -99,6 +102,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [metricsHistory, setMetricsHistory] = useState<SystemMetrics[]>([]);
   // Only the polling fallback writes this; the live socket supplies its own.
   const [polledProcesses, setPolledProcesses] = useState<Process[]>([]);
+  const [insightHistory, setInsightHistory] = useState<InsightEntry[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [hosts, setHosts] = useState<FleetHost[]>([]);
   const [firingAlerts, setFiringAlerts] = useState(0);
@@ -157,6 +161,32 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   }, [connected, wsMetricsHistory, selectedHost]);
 
+  /**
+   * Stored analyses, loaded regardless of transport.
+   *
+   * This used to live inside the polling fallback, which returns early when
+   * the socket is connected — so with a healthy WebSocket the dashboard never
+   * loaded a single stored insight and reported "No analysis yet" against a
+   * database full of them.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const history = await fetchInsightHistory(selectedHost);
+      if (cancelled) return;
+      setInsightHistory(history);
+      if (history.length > 0) {
+        setAiResult((prev) => prev ?? history[0].analysis);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), INSIGHT_REFRESH_RATE_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedHost]);
+
   // Fallback polling when the WebSocket is not connected.
   useEffect(() => {
     if (connected) return;
@@ -171,10 +201,6 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setMetricsHistory(metrics);
       setPolledProcesses(procs);
 
-      const latestInsight = await fetchLatestInsight();
-      if (!cancelled && latestInsight) {
-        setAiResult((prev) => prev ?? latestInsight);
-      }
     };
 
     fetchData();
@@ -300,11 +326,11 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       feed,
       frozen: frozen !== null,
       toggleFreeze,
-      ai: { result: aiResult, loading: isAiLoading, error: aiError, run },
+      ai: { result: aiResult, history: insightHistory, loading: isAiLoading, error: aiError, run },
     };
     // `run` is stable enough for this provider's lifetime; excluded deliberately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metricsHistory, now, connected, liveProcesses, logs, aiResult, isAiLoading, aiError, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
+  }, [metricsHistory, now, connected, liveProcesses, logs, aiResult, insightHistory, isAiLoading, aiError, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 };

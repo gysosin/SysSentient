@@ -43,19 +43,24 @@ func NewAIService(ctx context.Context, cfg config.GeminiConfig) (*AIService, err
 	}, nil
 }
 
-func (s *AIService) AnalyzeSystemState(ctx context.Context, state models.SystemState, logs string) (string, error) {
+// AnalyzeSystemState returns an analysis and whether it came from the cache.
+//
+// The caller needs to know: a cache hit used to be persisted as a fresh
+// insight, so an unchanging machine accumulated identical rows under different
+// timestamps and a history view would show the same answer repeatedly.
+func (s *AIService) AnalyzeSystemState(ctx context.Context, state models.SystemState, logs string) (string, bool, error) {
 	optimizedLogs := CollapseLogs(logs)
 
 	signatureContent := state.TopProcesses + "\n" + optimizedLogs
 	if cached, found := s.ragStore.GetCachedInsight(signatureContent); found {
 		// Cached insight is already a JSON string
-		return cached, nil
+		return cached, true, nil
 	}
 
 	// Refuse to spend past the operator's daily cap. Checked after the cache
 	// so a cached answer is still served once the budget is exhausted.
 	if err := s.budget.Check(); err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	// Use circuit breaker to protect against repeated API failures
@@ -139,14 +144,14 @@ Respond STRICTLY in JSON format with this structure:
 	if err != nil {
 		// Check if circuit is open
 		if errors.Is(err, ErrCircuitOpen) {
-			return "", fmt.Errorf("AI service unavailable (circuit breaker open): too many recent failures")
+			return "", false, fmt.Errorf("AI service unavailable (circuit breaker open): too many recent failures")
 		}
-		return "", err
+		return "", false, err
 	}
 
 	s.ragStore.SaveInsight(signatureContent, result)
 
-	return result, nil
+	return result, false, nil
 }
 
 // BudgetStatus reports today's AI spend against the configured cap, so the

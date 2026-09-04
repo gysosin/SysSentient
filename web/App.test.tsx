@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 vi.mock('./services/api', () => ({
   fetchMetricsHistory: vi.fn(async () => ({ metrics: [], processes: [] })),
   fetchRecentLogs: vi.fn(async () => []),
-  fetchLatestInsight: vi.fn(async () => null),
+  fetchInsightHistory: vi.fn(async () => []),
   triggerAnalysis: vi.fn(async () => {
     throw new Error('not used');
   }),

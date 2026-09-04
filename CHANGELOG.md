@@ -9,6 +9,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Stored AI analyses were invisible.** With six in the database the dashboard
+  reported "No analysis yet". Four faults stacked: the record had no JSON tags
+  so the API emitted `Content`/`Timestamp` while the client read
+  `content`/`timestamp`; the loader ran only inside the polling fallback, which
+  returns early when the WebSocket is connected; the client kept `data[0]` and
+  discarded the other nine; and `/api/insights` accepted no parameters at all.
+- A cache hit was persisted as a fresh insight, so an unchanging machine
+  accumulated identical analyses under different timestamps.
+- Insights carry `host_id`, a stable `id`, a `status` column and a millisecond
+  timestamp, so a fleet can attribute an analysis and a timeline can filter one.
+
+### Added
+
+- **An insight history.** `/api/insights` takes `limit`, `host`, `status`,
+  `from` and `to`; the Insights page shows every stored analysis as a
+  timeline you can click back through.
+
+### Fixed
+
 - **The Processes screen was wrong, not just confusing.** On a 626-process host
   it reported **10 processes**, and process CPU summed to **445.7%** against a
   system CPU of 92.4% — the two figures used the same `%` label on different

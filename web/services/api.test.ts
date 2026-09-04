@@ -3,7 +3,7 @@ import { afterEach, test } from 'vitest';
 
 import {
   fetchHosts,
-  fetchLatestInsight,
+  fetchInsightHistory,
   fetchMe,
   fetchMetricsHistory,
   fetchSetupStatus,
@@ -31,9 +31,13 @@ test('fetchLatestInsight normalizes malformed stored analysis JSON', async () =>
     headers: { 'Content-Type': 'application/json' },
   });
 
-  const insight = await fetchLatestInsight();
+  const history = await fetchInsightHistory();
 
-  assert.deepEqual(insight, {
+  // Every stored row is returned. The previous reader took data[0] and
+  // discarded the rest, so ten stored analyses became one and there was no
+  // history to show.
+  assert.equal(history.length, 1);
+  assert.deepEqual(history[0].analysis, {
     status: 'Warning',
     summary: 'Recent Insight',
     detailedAnalysis: 'No details provided',

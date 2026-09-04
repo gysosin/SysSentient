@@ -156,12 +156,12 @@ func TestSaveAndGetInsights(t *testing.T) {
 	defer store.Close()
 
 	insight := "System is running normally"
-	err = store.SaveInsight(insight)
+	err = saveTestInsight(t, store, insight)
 	if err != nil {
 		t.Fatalf("Failed to save insight: %v", err)
 	}
 
-	insights, err := store.GetRecentInsights(1)
+	insights, err := store.ListInsights(InsightQuery{Limit: 1})
 	if err != nil {
 		t.Fatalf("Failed to get insights: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestGetRecentRejectsNonPositiveLimit(t *testing.T) {
 		t.Fatalf("Expected no metrics for negative limit, got %d", len(states))
 	}
 
-	insights, err := store.GetRecentInsights(0)
+	insights, err := store.ListInsights(InsightQuery{Limit: 0})
 	if err != nil {
 		t.Fatalf("GetRecentInsights returned error: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestPruneOldInsights(t *testing.T) {
 		t.Fatalf("Failed to prune old insights: %v", err)
 	}
 
-	insights, err := store.GetRecentInsights(10)
+	insights, err := store.ListInsights(InsightQuery{Limit: 10})
 	if err != nil {
 		t.Fatalf("Failed to read insights: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestListEndpointsReturnEmptySliceNotNil(t *testing.T) {
 		t.Fatal("GetRecent() returned nil, want an empty slice")
 	}
 
-	insights, err := store.GetRecentInsights(10)
+	insights, err := store.ListInsights(InsightQuery{Limit: 10})
 	if err != nil {
 		t.Fatalf("GetRecentInsights() error = %v", err)
 	}
@@ -982,4 +982,10 @@ func TestSaveAndGetRecentPreservesMemoryComposition(t *testing.T) {
 		t.Errorf("GetRecentForHost lost memory composition: cached=%d buffers=%d",
 			scoped[0].MemoryCached, scoped[0].MemoryBuffers)
 	}
+}
+
+// saveTestInsight stores an analysis with a timestamp of now.
+func saveTestInsight(t *testing.T, store *Store, content string) error {
+	t.Helper()
+	return store.SaveInsightRecord(content, "", time.Now())
 }

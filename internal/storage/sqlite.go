@@ -143,7 +143,9 @@ func createTable(db *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS insights (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp DATETIME,
-		content TEXT
+		content TEXT,
+		host_id TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT ''
 	);
 	`
 	if _, err = db.Exec(queryInsights); err != nil {
@@ -152,6 +154,14 @@ func createTable(db *sql.DB) error {
 
 	// insights is queried with ORDER BY timestamp DESC on every dashboard poll
 	// and had no index at all — a full scan plus sort every time.
+	if err := createInsightColumns(db); err != nil {
+		return err
+	}
+
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_insights_host ON insights(host_id, timestamp);`); err != nil {
+		return fmt.Errorf("failed to index insights by host: %w", err)
+	}
+
 	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_insights_timestamp ON insights(timestamp);`); err != nil {
 		return fmt.Errorf("failed to create insights index: %w", err)
 	}
@@ -435,12 +445,6 @@ func (s *Store) PruneOldInsights(hours int) error {
 	return err
 }
 
-func (s *Store) SaveInsight(content string) error {
-	query := `INSERT INTO insights (timestamp, content) VALUES (CURRENT_TIMESTAMP, ?)`
-	_, err := s.db.Exec(query, content)
-	return err
-}
-
 func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 	if limit < 1 {
 		return []models.SystemState{}, nil
@@ -481,37 +485,6 @@ func decodeProcesses(raw string) []models.Process {
 		return []models.Process{}
 	}
 	return values
-}
-
-type Insight struct {
-	Timestamp string
-	Content   string
-}
-
-func (s *Store) GetRecentInsights(limit int) ([]Insight, error) {
-	if limit < 1 {
-		return []Insight{}, nil
-	}
-
-	query := `SELECT timestamp, content FROM insights ORDER BY timestamp DESC LIMIT ?`
-	rows, err := s.db.Query(query, limit)
-	if err != nil {
-		return nil, err
-	}
-	// Rows are fully consumed below; a close error adds nothing.
-	defer func() { _ = rows.Close() }()
-
-	// Return an empty slice, not nil: nil marshals to JSON `null`, which forces
-	// every client to defensively null-check an endpoint that returns a list.
-	results := make([]Insight, 0, limit)
-	for rows.Next() {
-		var i Insight
-		if err := rows.Scan(&i.Timestamp, &i.Content); err != nil {
-			return nil, err
-		}
-		results = append(results, i)
-	}
-	return results, nil
 }
 
 func (s *Store) Close() error {
