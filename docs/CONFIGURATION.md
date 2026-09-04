@@ -110,3 +110,14 @@ returns the historical bare array of the newest samples.
 
 `GET /api/export` takes the same window as `since` and `until`, plus `format`
 (`json`/`csv`).
+
+## MCP
+
+`/mcp` exposes the assistant's read-only tools over the Model Context Protocol,
+so an MCP client can query the fleet from outside the dashboard. Point it at
+`http://<server>/mcp` with an `X-API-Key` header set to `server.api_key`.
+
+The tools are the same six the in-dashboard assistant uses — `list_hosts`,
+`query_metrics`, `top_processes`, `recent_alerts`, `recent_logs`,
+`recent_insights` — and are read-only: nothing exposed here can change the
+system.
