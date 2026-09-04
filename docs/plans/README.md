@@ -39,6 +39,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [28](28-hosts-screen.md) | Hosts as a first-class screen | done |
 | [32](32-ai-assistant.md) | Agentic AI assistant | done |
 | [33](33-mcp-server.md) | MCP server | done |
+| [34](34-packaging-polish.md) | One package, for people who don't live in a terminal | done |
 
 ## Working agreement
 
