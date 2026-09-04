@@ -29,6 +29,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | 21 | [Harvest from stale branches](21-harvest-from-stale-branches.md) | reference |
 | [22](22-service-install.md) | `service install` for systemd, launchd and Windows | done |
 | [23](23-server-mode-maintenance.md) | Make server mode a first-class citizen | done |
+| [24](24-time-range-queries.md) | Time-range query engine | done |
 
 ## Working agreement
 

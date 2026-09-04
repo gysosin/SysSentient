@@ -66,7 +66,7 @@ func TestRollupPreservesHistoryPastTheRawWindow(t *testing.T) {
 	}
 
 	// ...but the history is not.
-	points, err := s.GetRollups(RollupMinute, "host-a", old.Add(-time.Hour), 100)
+	points, err := s.GetRollupsRange(RollupMinute, "host-a", Range{From: old.Add(-time.Hour), To: time.Now()}, 100)
 	if err != nil {
 		t.Fatalf("read rollups: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestRollupIsIdempotent(t *testing.T) {
 		}
 	}
 
-	points, err := s.GetRollups(RollupMinute, "host-a", old.Add(-time.Hour), 100)
+	points, err := s.GetRollupsRange(RollupMinute, "host-a", Range{From: old.Add(-time.Hour), To: time.Now()}, 100)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestFiveMinuteRollupWeightsBySampleCount(t *testing.T) {
 		t.Fatalf("rollup: %v", err)
 	}
 
-	points, err := s.GetRollups(RollupFiveMinute, "host-a", base.Add(-time.Hour), 10)
+	points, err := s.GetRollupsRange(RollupFiveMinute, "host-a", Range{From: base.Add(-time.Hour), To: time.Now()}, 10)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestPruneDoesNotOutrunRollup(t *testing.T) {
 	if err := s.PruneTiers(policy, now); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
-	points, err := s.GetRollups(RollupMinute, "host-a", old.Add(-time.Hour), 10)
+	points, err := s.GetRollupsRange(RollupMinute, "host-a", Range{From: old.Add(-time.Hour), To: time.Now()}, 10)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}

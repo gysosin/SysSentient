@@ -459,29 +459,7 @@ func (s *Store) GetRecent(limit int) ([]models.SystemState, error) {
 	// Rows are fully consumed below; a close error adds nothing.
 	defer func() { _ = rows.Close() }()
 
-	results := make([]models.SystemState, 0, limit)
-	for rows.Next() {
-		var m models.SystemState
-		var cpuPerCoreJSON string
-		var processesJSON string
-		var filesystemsJSON string
-		if err := rows.Scan(
-			&m.Timestamp, &m.CPUUsage, &cpuPerCoreJSON,
-			&m.MemoryUsed, &m.MemoryTotal, &m.SwapUsed, &m.SwapTotal,
-			&m.DiskReadBytes, &m.DiskWriteBytes, &m.DiskIOPS,
-			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
-			&m.Temperature, &m.TopProcesses, &processesJSON, &m.UptimeSeconds, &m.Hostname, &filesystemsJSON, &m.HostID,
-			&m.MemoryCached, &m.MemoryBuffers,
-		); err != nil {
-			return nil, err
-		}
-		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
-		m.Processes = decodeProcesses(processesJSON)
-		m.Filesystems = decodeFilesystems(filesystemsJSON)
-		restoreTopProcesses(&m)
-		results = append(results, m)
-	}
-	return results, nil
+	return scanMetricRows(rows)
 }
 
 func decodeCPUPerCore(raw string) []float64 {
@@ -696,30 +674,7 @@ func (s *Store) GetRecentForHost(hostID string, limit int) ([]models.SystemState
 	}
 	defer func() { _ = rows.Close() }()
 
-	results := make([]models.SystemState, 0, limit)
-	for rows.Next() {
-		var m models.SystemState
-		var cpuPerCoreJSON string
-		var processesJSON string
-		var filesystemsJSON string
-		if err := rows.Scan(
-			&m.Timestamp, &m.CPUUsage, &cpuPerCoreJSON,
-			&m.MemoryUsed, &m.MemoryTotal, &m.SwapUsed, &m.SwapTotal,
-			&m.DiskReadBytes, &m.DiskWriteBytes, &m.DiskIOPS,
-			&m.NetSentBytes, &m.NetRecvBytes, &m.LoadAvg1, &m.LoadAvg5, &m.LoadAvg15,
-			&m.Temperature, &m.TopProcesses, &processesJSON, &m.UptimeSeconds,
-			&m.Hostname, &filesystemsJSON, &m.HostID,
-			&m.MemoryCached, &m.MemoryBuffers,
-		); err != nil {
-			return nil, err
-		}
-		m.CPUPerCore = decodeCPUPerCore(cpuPerCoreJSON)
-		m.Processes = decodeProcesses(processesJSON)
-		m.Filesystems = decodeFilesystems(filesystemsJSON)
-		restoreTopProcesses(&m)
-		results = append(results, m)
-	}
-	return results, rows.Err()
+	return scanMetricRows(rows)
 }
 
 // SaveBatch stores many samples in one transaction.
