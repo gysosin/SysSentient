@@ -9,6 +9,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **An MCP server** at `/mcp`, offering the same six read-only tools the
+  in-dashboard assistant uses, so Claude Desktop and other MCP clients can ask
+  about your fleet. One surface rather than two implementations to keep in
+  step. Authenticated exactly like every other API route — a session cookie or
+  an API key — so it uses a credential you already have and can already revoke.
+
+### Added
+
 - **An assistant that queries your data.** The AI was one-shot: a single call
   over one snapshot, with no way to look anything up, so "why was it slow at
   3pm?" was unanswerable. It now has a read-only tool surface — metric windows,

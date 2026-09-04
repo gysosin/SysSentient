@@ -157,6 +157,11 @@ func (s *Server) routes() http.Handler {
 	// Admin only: anything that spends money, changes state, or manages people.
 	// The assistant makes several model calls per question, so it shares the
 	// analysis rate limiter and the same admin gate.
+	// The same read-only tools the in-dashboard assistant uses, for clients
+	// outside the browser. Authenticated like every other API route.
+	mux.Handle("/mcp", s.mcpHandler())
+	mux.Handle("/mcp/", s.mcpHandler())
+
 	mux.HandleFunc("POST /api/chat", s.requireAdmin(rateLimit(s.analyzeLimiter, "60", s.handleChat)))
 	mux.HandleFunc("POST /api/analyze", s.requireAdmin(rateLimit(s.analyzeLimiter, "60", s.handleAnalyze)))
 	mux.HandleFunc("POST /api/alerts/{ruleID}/acknowledge", s.requireAdmin(s.handleAcknowledgeAlert))
