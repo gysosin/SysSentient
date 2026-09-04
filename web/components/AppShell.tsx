@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  Server,
   AlertTriangle,
   Cpu,
   FileText,
@@ -34,6 +35,7 @@ import {
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/processes', label: 'Processes', icon: Cpu },
+  { to: '/hosts', label: 'Hosts', icon: Server },
   { to: '/logs', label: 'Logs', icon: FileText },
   { to: '/insights', label: 'Insights', icon: Sparkles },
   { to: '/alerts', label: 'Alerts', icon: AlertTriangle },
@@ -281,7 +283,10 @@ const AppShell: React.FC<Props> = ({
 
             {/* Only shown once a fleet exists; a single-node install keeps the
                 plain hostname it always had. */}
-            {hosts.length > 1 ? (
+            {/* Shown even with one host: the switcher used to appear only once a
+                second machine existed, so the concept -- and the path to adding
+                one -- were invisible on every single-node install. */}
+            {hosts.length >= 1 ? (
               <Select
                 value={selectedHost || '__all__'}
                 onValueChange={(v) => onSelectHost(v === '__all__' ? '' : v)}

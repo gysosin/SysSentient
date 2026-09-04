@@ -12,6 +12,7 @@ import { formatDuration } from './lib/utils';
 
 import Overview from './pages/Overview';
 import Processes from './pages/Processes';
+import Hosts from './pages/Hosts';
 import Logs from './pages/Logs';
 import Insights from './pages/Insights';
 import Alerts from './pages/Alerts';
@@ -79,6 +80,7 @@ const App: React.FC = () => (
             <Route element={<Console />}>
               <Route index element={<Overview />} />
               <Route path="processes" element={<Processes />} />
+              <Route path="hosts" element={<Hosts />} />
               <Route path="logs" element={<Logs />} />
               <Route path="insights" element={<Insights />} />
               <Route path="alerts" element={<Alerts />} />
