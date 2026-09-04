@@ -132,7 +132,25 @@ jobs:
         run: npm ci
 
       - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+        # Retry, because npm's audit endpoint returns 503 often enough to block
+        # unrelated merges -- it did so twice in a row on 2026-09-04. The gate
+        # itself is unchanged: a run that reaches the endpoint and finds
+        # vulnerabilities still fails. Only an unreachable endpoint is retried,
+        # and after three attempts that fails too, because a security check
+        # that silently skips itself is worse than one that blocks.
+        run: |
+          for attempt in 1 2 3; do
+            output=$(npm audit --audit-level=moderate 2>&1) && { echo "$output"; exit 0; }
+            echo "$output"
+            if ! grep -qiE 'audit endpoint returned an error|503|ENOTFOUND|ETIMEDOUT|ECONNRESET' <<<"$output"; then
+              echo "::error::npm audit found vulnerabilities"
+              exit 1
+            fi
+            echo "::warning::npm audit endpoint unreachable (attempt $attempt/3)"
+            sleep $((attempt * 20))
+          done
+          echo "::error::npm audit endpoint unreachable after 3 attempts"
+          exit 1
 
       - name: Type-check dashboard
         run: npm run typecheck

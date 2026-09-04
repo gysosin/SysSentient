@@ -9,8 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"path/filepath"
+
 	"sys-sentient/internal/auth"
+	"sys-sentient/internal/config"
 	"sys-sentient/internal/models"
+	"sys-sentient/internal/storage"
 )
 
 // enrol runs the full join flow and returns the agent's own credential.
@@ -186,5 +190,40 @@ func TestJoinCommandIsPasteable(t *testing.T) {
 	want := "sys-sentient agent join --server https://sentinel.example.com --token abc123 --install-service"
 	if got != want {
 		t.Errorf("joinCommand() = %q, want %q", got, want)
+	}
+}
+
+func TestIngestDoesNotAlertWhenAlertingIsDisabled(t *testing.T) {
+	store, err := storage.NewStore(filepath.Join(t.TempDir(), "noalert.db"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	// A daemon built with alerting off constructs no evaluator. The ingest
+	// path had no enabled check of its own, so a fleet server used to alert
+	// regardless of the setting.
+	srv := NewServer(config.ServerConfig{}, testPrivacy(), store, nil, nil, nil)
+
+	body, _ := json.Marshal(IngestRequest{
+		Samples: []models.SystemState{{
+			HostID: "h1", Hostname: "web-01", Timestamp: time.Now(),
+			CPUUsage: 99, MemoryUsed: 1 << 30, MemoryTotal: 1 << 30,
+		}},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/ingest", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.handleIngest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ingest = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	events, err := store.GetRecentAlertEvents(10)
+	if err != nil {
+		t.Fatalf("GetRecentAlertEvents: %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("recorded %d alert events with alerting disabled, want 0", len(events))
 	}
 }

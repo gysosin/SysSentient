@@ -167,6 +167,7 @@ func (s *Server) evaluateAndRecord(state models.SystemState) {
 				Value:      transition.Value,
 				Threshold:  transition.Threshold,
 				Hostname:   transition.Hostname,
+				HostID:     transition.HostID,
 			}); err != nil {
 				slog.Error("failed to store alert event", "error", err)
 			}

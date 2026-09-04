@@ -7,6 +7,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Server mode was destroying the history it promised to keep.** The fleet
+  deployment ran a maintenance list that pruned raw metrics without ever rolling
+  them up first, so everything past the retention cutoff was deleted rather than
+  aggregated: the 30-day and 1-year tiers never existed, `/api/export` returned
+  nothing, and — with no WAL checkpoint or vacuum — the database only grew. Both
+  modes now run one shared maintenance path, guarded by a test that drives the
+  real server loop.
+- Alerts were evaluated, stored and dispatched on the ingest path even with
+  `alerting.enabled: false`. The evaluator is now built only when alerting is
+  on, so every caller inherits the setting.
+- `GET`/`PATCH /api/settings` returned 404 in server mode, because the runtime
+  was only created on the all-in-one path — so nothing was tunable on the
+  deployment most likely to be tuned remotely.
+- Unredeemed join tokens accumulated for the life of an install;
+  `PruneExpiredJoinTokens` was never called outside its own test.
+- `alert_events` now records `host_id` as well as `hostname`, so alert history
+  can be joined to hosts and two machines sharing a name stop rendering as
+  duplicate alerts.
+
 ### Added
 
 - **`sys-sentient service install|uninstall|status`**, and `--install-service`
