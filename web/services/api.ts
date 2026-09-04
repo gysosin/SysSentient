@@ -309,14 +309,21 @@ export function onUnauthorized(handler: (() => void) | null): void {
 // the loss of a session, so it must not bounce the user anywhere.
 const isAuthRoute = (input: RequestInfo | URL): boolean => String(input).includes('/api/auth/');
 
-async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+async function fetchWithTimeout(
+    input: RequestInfo | URL,
+    init?: RequestInit & { timeoutMs?: number },
+): Promise<Response> {
+    const { timeoutMs, ...requestInit } = init ?? {};
     const controller = new AbortController();
-    const timeoutID = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+    // An export of a long window legitimately outlives the timeout every other
+    // request uses, so callers can raise it rather than the default rising for
+    // everyone.
+    const timeoutID = setTimeout(() => controller.abort(), timeoutMs ?? API_REQUEST_TIMEOUT_MS);
 
     try {
         const response = await fetch(input, {
             credentials: 'same-origin',
-            ...init,
+            ...requestInit,
             signal: controller.signal,
         });
         if (response.status === 401 && !isAuthRoute(input)) {
@@ -962,4 +969,63 @@ function normalizeRollups(points: RawRollupPoint[]): SystemMetrics[] {
             } satisfies SystemMetrics;
         })
         .filter((m): m is SystemMetrics => m !== null);
+}
+
+/** What an export covers. */
+export interface ExportOptions {
+    format: 'csv' | 'json';
+    from?: Date;
+    to?: Date;
+    hostID?: string;
+    /** raw, 1m or 5m. Defaults to whatever the current window resolved to. */
+    resolution?: string;
+}
+
+/**
+ * Downloads retained metrics for a window.
+ *
+ * The endpoint has existed and been fully featured since the backup shard; no
+ * part of the UI called it, so the only way to get data out was to construct
+ * the URL by hand.
+ */
+export async function exportMetrics(options: ExportOptions): Promise<void> {
+    const params = new URLSearchParams({ format: options.format });
+    if (options.resolution) params.set('resolution', options.resolution);
+    if (options.from) params.set('since', options.from.toISOString());
+    if (options.to) params.set('until', options.to.toISOString());
+    if (options.hostID) params.set('host', options.hostID);
+
+    const res = await fetchWithTimeout(`${API_BASE_URL}/export?${params}`, {
+        // An export of a long window can take longer than a normal request.
+        timeoutMs: 60000,
+    });
+    if (!res.ok) {
+        throw new Error((await res.text()).trim() || 'Export failed');
+    }
+
+    // Read the whole body before creating the link: a failed stream would
+    // otherwise save a truncated file that looks complete.
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filenameFrom(res.headers.get('Content-Disposition'), options);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } finally {
+        // Revoking immediately can cancel the download in some browsers, so
+        // this waits a tick.
+        window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+}
+
+/** Prefers the server's filename, falling back to one describing the window. */
+function filenameFrom(disposition: string | null, options: ExportOptions): string {
+    const match = disposition?.match(/filename="?([^"]+)"?/);
+    if (match) return match[1];
+
+    const stamp = (options.to ?? new Date()).toISOString().slice(0, 10);
+    return `sys-sentient_${options.resolution ?? 'metrics'}_${stamp}.${options.format}`;
 }

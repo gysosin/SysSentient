@@ -33,6 +33,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [27](27-process-accuracy.md) | Make processes true | done |
 | [30](30-insight-history.md) | Insight history | done |
 | [25](25-chart-timerange.md) | Chart drill-down and a time picker | done |
+| [26](26-export-ui.md) | Export from the UI | done |
 
 ## Working agreement
 

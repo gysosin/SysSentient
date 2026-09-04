@@ -9,6 +9,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Export from the dashboard.** The export endpoint has been complete
+  server-side since the backup work and nothing in the UI called it, so getting
+  data out meant constructing a URL by hand. A control beside the charts now
+  downloads the visible window — the selected range, host and tier — as CSV or
+  JSON.
+
+### Added
+
 - **A time picker, and drag-to-zoom on every chart.** Live / 15m / 1h / 6h /
   24h / 7d / 30d in the header, respected by the whole dashboard; dragging
   across any chart selects that window everywhere, so reading a spike shows
