@@ -84,6 +84,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **AI analysis failed outright against a live Gemini key.** The prompt asked
+  for bullet points, so the model returned `detailedAnalysis` as an array —
+  a reasonable reading — and the whole analysis was discarded with
+  `cannot unmarshal array into Go struct field`. Free-text fields now accept a
+  string, an array or nested objects and render them as text, and the request
+  sends an explicit response schema so the shape is pinned rather than implied.
+
 - **The packaged systemd service could not start.** The unit's
   `ExecStart=/opt/sys-sentient/sys-daemon` named a path no package ever
   created — the binary installs to `/usr/bin`. Anyone who installed the `.deb`,

@@ -80,7 +80,7 @@ Respond STRICTLY in JSON format with this structure:
 {
   "status": "Healthy" | "Warning" | "Critical",
   "summary": "One sentence summary.",
-  "detailedAnalysis": "Use bullet points and short paragraphs. No markdown bolding (**). Plain text or simple formatting.",
+  "detailedAnalysis": "A SINGLE STRING, not a list. Separate bullet points with newlines. No markdown bolding (**).",
   "recommendedActions": [
     { "id": "unique_id", "command": "suggested shell command", "description": "what it does", "isSafe": boolean }
   ]
@@ -96,9 +96,14 @@ Respond STRICTLY in JSON format with this structure:
 			optimizedLogs,
 		)
 
-		// Configure for JSON response
+		// Constrain the shape as well as the encoding. Asking for JSON alone
+		// left the model free to answer "use bullet points" with an array of
+		// bullets, which is a reasonable reading of the prompt and a type
+		// error for the decoder. The schema removes the ambiguity; FlexText
+		// still absorbs it if a model disregards the schema anyway.
 		resp, apiErr := s.client.Models.GenerateContent(ctx, s.model, genai.Text(prompt), &genai.GenerateContentConfig{
 			ResponseMIMEType: "application/json",
+			ResponseSchema:   analysisSchema(),
 		})
 		if apiErr != nil {
 			return fmt.Errorf("failed to generate content: %w", apiErr)
@@ -151,4 +156,38 @@ func (s *AIService) BudgetStatus() (spent, limit float64) {
 		return 0, 0
 	}
 	return s.budget.Spent()
+}
+
+// analysisSchema pins the response shape the decoder expects.
+func analysisSchema() *genai.Schema {
+	str := func(description string) *genai.Schema {
+		return &genai.Schema{Type: genai.TypeString, Description: description}
+	}
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"status": {
+				Type: genai.TypeString,
+				Enum: []string{"Healthy", "Warning", "Critical"},
+			},
+			"summary": str("One sentence."),
+			"detailedAnalysis": str(
+				"Plain text. Use newline-separated lines for bullet points; " +
+					"this must be a single string, not a list."),
+			"recommendedActions": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"id":          str("Unique identifier."),
+						"command":     str("Suggested shell command."),
+						"description": str("What the command does."),
+						"isSafe":      {Type: genai.TypeBoolean},
+					},
+					Required: []string{"id", "command", "description", "isSafe"},
+				},
+			},
+		},
+		Required: []string{"status", "summary", "detailedAnalysis", "recommendedActions"},
+	}
 }

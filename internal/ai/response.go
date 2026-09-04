@@ -20,11 +20,11 @@ func NormalizeAnalysisResponse(raw string) (string, error) {
 		analysis.Status = "Warning"
 	}
 
-	analysis.Summary = strings.TrimSpace(analysis.Summary)
+	analysis.Summary = models.FlexText(strings.TrimSpace(analysis.Summary.String()))
 	if analysis.Summary == "" {
 		analysis.Summary = "AI Analysis Generated"
 	}
-	analysis.DetailedAnalysis = strings.TrimSpace(analysis.DetailedAnalysis)
+	analysis.DetailedAnalysis = models.FlexText(strings.TrimSpace(analysis.DetailedAnalysis.String()))
 	if analysis.DetailedAnalysis == "" {
 		analysis.DetailedAnalysis = analysis.Summary
 	}

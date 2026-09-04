@@ -370,7 +370,7 @@ func formatInsightLogSummary(raw string) string {
 	if status == "" {
 		status = "Unknown"
 	}
-	summary := compactLogText(analysis.Summary, 120)
+	summary := compactLogText(analysis.Summary.String(), 120)
 	if summary == "" {
 		return fmt.Sprintf("AI insight generated: status=%s actions=%d", status, len(analysis.RecommendedActions))
 	}
