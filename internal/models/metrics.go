@@ -73,9 +73,12 @@ type AIAction struct {
 }
 
 type AIAnalysis struct {
-	Status             string     `json:"status"` // Healthy, Warning, Critical
-	Summary            string     `json:"summary"`
-	DetailedAnalysis   string     `json:"detailedAnalysis"`
+	Status string `json:"status"` // Healthy, Warning, Critical
+	// Free-text fields are FlexText because a model asked for bullet points
+	// returns an array of them, and losing a good answer to a type mismatch
+	// helps nobody. See FlexText.
+	Summary            FlexText   `json:"summary"`
+	DetailedAnalysis   FlexText   `json:"detailedAnalysis"`
 	RecommendedActions []AIAction `json:"recommendedActions"`
 }
 
