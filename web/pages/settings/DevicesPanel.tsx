@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Skeleton } from '../../components/ui/skeleton';
+import { cn } from '../../lib/utils';
 import { LiveDot } from '../../components/ui/motion-primitives';
 
 /** A device is considered live if it has reported within this window. */
@@ -88,6 +89,13 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 
 /** The one-time reveal of a freshly minted token. */
 function IssuedToken({ issued }: { issued: IssuedJoinToken }) {
+  const [platform, setPlatform] = React.useState<'unix' | 'windows' | 'installed'>('unix');
+
+  const shownCommand =
+    platform === 'installed'
+      ? issued.command
+      : (issued.bootstrap?.[platform] ?? issued.command);
+
   return (
     <div className="border-brand/40 bg-brand/5 space-y-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -99,12 +107,32 @@ function IssuedToken({ issued }: { issued: IssuedJoinToken }) {
         </Badge>
       </div>
 
+      {/* Two paths, because the screen used to assume the binary was already
+          on the machine and offered nothing to install it with. */}
+      <div className="flex gap-1" role="tablist" aria-label="Target platform">
+        {(['unix', 'windows', 'installed'] as const).map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            role="tab"
+            aria-selected={platform === choice}
+            onClick={() => setPlatform(choice)}
+            className={cn(
+              'rounded px-2 py-1 font-mono text-2xs transition-colors',
+              platform === choice ? 'bg-brand/15 text-brand' : 'text-mute hover:text-fg',
+            )}
+          >
+            {choice === 'unix' ? 'Linux / macOS' : choice === 'windows' ? 'Windows' : 'Already installed'}
+          </button>
+        ))}
+      </div>
+
       <pre className="bg-panel border-line overflow-x-auto rounded-md border p-3 text-xs leading-relaxed">
-        <code>{issued.command}</code>
+        <code>{shownCommand}</code>
       </pre>
 
       <div className="flex flex-wrap items-center gap-2">
-        <CopyButton value={issued.command} label="Copy the enrolment command" />
+        <CopyButton value={shownCommand} label="Copy the enrolment command" />
         {/* Stated plainly, because there is no way to recover it afterwards. */}
         <p className="text-mute text-2xs">
           This token is shown once and cannot be retrieved later. It can be used by one device.

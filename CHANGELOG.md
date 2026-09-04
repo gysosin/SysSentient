@@ -9,6 +9,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The server hands out the agent.** The Devices screen told you to install
+  SysSentient on the target machine and offered nothing to install it with —
+  the daemon served no binaries, installers or scripts. It now serves
+  `/install.sh` and `/install.ps1`, and the Devices screen offers a one-liner
+  per platform that fetches the right release, verifies it against the
+  published checksums, and enrols. An unverified binary is refused outright,
+  because the script is meant to be piped into a shell as root.
+
+### Fixed
+
+- The installer's release lookup used `/releases/latest`, which excludes
+  pre-releases and 404s when every release is one — the case for a project in
+  beta. It now falls back to the newest release of any kind.
+
+### Added
+
 - **A notification centre.** The console had no notification surface at all —
   no bell, no toasts, no unread state — so an alert that fired while you were
   on another screen was invisible until you went looking. A bell with unread

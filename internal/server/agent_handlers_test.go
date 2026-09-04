@@ -227,3 +227,58 @@ func TestIngestDoesNotAlertWhenAlertingIsDisabled(t *testing.T) {
 		t.Errorf("recorded %d alert events with alerting disabled, want 0", len(events))
 	}
 }
+
+func TestBootstrapCommandsCoverAMachineWithNothingInstalled(t *testing.T) {
+	cmds := bootstrapCommands("https://monitor.example.com", "tok123")
+
+	// The Devices screen used to assume the binary was already there. These
+	// must be runnable on a machine that has never heard of SysSentient.
+	unix, ok := cmds["unix"]
+	if !ok || !strings.Contains(unix, "/install.sh") || !strings.Contains(unix, "tok123") {
+		t.Errorf("unix bootstrap = %q", unix)
+	}
+	win, ok := cmds["windows"]
+	if !ok || !strings.Contains(win, "install.ps1") || !strings.Contains(win, "tok123") {
+		t.Errorf("windows bootstrap = %q", win)
+	}
+	// The server's own address, so a copied command reaches the right host.
+	if !strings.Contains(unix, "https://monitor.example.com") {
+		t.Errorf("unix bootstrap does not name the server: %q", unix)
+	}
+}
+
+func TestInstallScriptsAreServedAndRunnable(t *testing.T) {
+	srv, _ := ingestServer(t)
+
+	for path, marker := range map[string]string{
+		"/install.sh":  "checksum mismatch",
+		"/install.ps1": "checksum mismatch",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			srv.handleInstallScript(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d", path, rec.Code)
+			}
+			body := rec.Body.String()
+			if len(body) < 500 {
+				t.Fatalf("%s is %d bytes, implausibly short", path, len(body))
+			}
+			// The script is piped straight into a shell, often as root. It
+			// must refuse an unverified binary rather than warn.
+			if !strings.Contains(body, marker) {
+				t.Errorf("%s does not refuse on a checksum mismatch", path)
+			}
+			// Not a download: a Content-Disposition would make a browser save
+			// it instead of the shell executing it.
+			if cd := rec.Header().Get("Content-Disposition"); cd != "" {
+				t.Errorf("%s sets Content-Disposition %q", path, cd)
+			}
+			if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+				t.Errorf("%s is missing nosniff", path)
+			}
+		})
+	}
+}
