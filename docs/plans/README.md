@@ -37,6 +37,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [31](31-notifications-and-rules.md) | Notification centre and rule control | done |
 | [29](29-agent-bootstrap.md) | Let the server hand out the agent | done |
 | [28](28-hosts-screen.md) | Hosts as a first-class screen | done |
+| [32](32-ai-assistant.md) | Agentic AI assistant | done |
 
 ## Working agreement
 

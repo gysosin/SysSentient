@@ -155,6 +155,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/alerts/history", s.requireAuth(s.handleAlertHistory))
 
 	// Admin only: anything that spends money, changes state, or manages people.
+	// The assistant makes several model calls per question, so it shares the
+	// analysis rate limiter and the same admin gate.
+	mux.HandleFunc("POST /api/chat", s.requireAdmin(rateLimit(s.analyzeLimiter, "60", s.handleChat)))
 	mux.HandleFunc("POST /api/analyze", s.requireAdmin(rateLimit(s.analyzeLimiter, "60", s.handleAnalyze)))
 	mux.HandleFunc("POST /api/alerts/{ruleID}/acknowledge", s.requireAdmin(s.handleAcknowledgeAlert))
 	mux.HandleFunc("GET /api/settings", s.requireAuth(s.handleGetRuntimeSettings))

@@ -3,6 +3,7 @@ import { Check, LockKeyhole, ShieldAlert } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboardData';
 import AIInsightPanel from '../components/AIInsightPanel';
+import { AssistantChat } from '../components/AssistantChat';
 import { Card, CardContent } from '../components/ui/card';
 import { ScreenHeading, SectionHeading } from '../components/ui/section-heading';
 import { cn } from '../lib/utils';
@@ -52,6 +53,9 @@ const Insights: React.FC = () => {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
         <div className="space-y-4">
+          {/* Ask-anything, beside the one-shot verdict. */}
+          <AssistantChat />
+
           <AIInsightPanel
             analysis={shown}
             error={ai.error}
