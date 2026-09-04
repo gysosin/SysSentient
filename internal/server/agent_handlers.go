@@ -38,6 +38,9 @@ type createTokenResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	// Command is the ready-to-paste enrolment line for the target machine.
 	Command string `json:"command"`
+	// Bootstrap is the one-liner for a machine that has nothing installed yet,
+	// keyed by platform family.
+	Bootstrap map[string]string `json:"bootstrap"`
 }
 
 // handleCreateJoinToken mints a single-use invitation for a new machine.
@@ -99,16 +102,32 @@ func (s *Server) handleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
 		Label:     label,
 		ExpiresAt: expiresAt,
 		Command:   joinCommand(s.publicURL(r), token),
+		Bootstrap: bootstrapCommands(s.publicURL(r), token),
 	})
 }
 
-// joinCommand renders the line an operator pastes on the joining machine.
+// joinCommand renders the line an operator pastes on a machine that already
+// has the binary.
 //
 // --install-service is included because an agent that only runs in somebody's
 // shell stops monitoring the moment they close it, which is not what anyone
 // enrolling a machine intends.
 func joinCommand(serverURL, token string) string {
 	return "sys-sentient agent join --server " + serverURL + " --token " + token + " --install-service"
+}
+
+// bootstrapCommands render the one-liners for a machine with nothing installed.
+//
+// The Devices screen used to say "install SysSentient on the machine, then run
+// the command below" and offer nothing to install it with — you had to already
+// have the binary to be told how to enrol it.
+func bootstrapCommands(serverURL, token string) map[string]string {
+	return map[string]string{
+		"unix": "curl -fsSL " + serverURL + "/install.sh | sh -s -- --server " +
+			serverURL + " --token " + token,
+		"windows": "iwr -useb " + serverURL + "/install.ps1 | iex; " +
+			"Install-SysSentient -Server " + serverURL + " -Token " + token,
+	}
 }
 
 // publicURL reconstructs the address the agent should call back on.

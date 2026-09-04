@@ -25,8 +25,24 @@ to `/api/ingest`.
 ### Agent
 
 Enrol the machine rather than hand-writing its config. On the server, open
-**Settings → Devices**, name the machine, and press *Generate command*. Run the
-command it gives you on the machine itself:
+**Settings → Devices**, name the machine, and press *Generate command*. It
+offers a command for each platform; run the matching one on the target machine.
+
+On a machine with nothing installed:
+
+```bash
+curl -fsSL http://<server>/install.sh | sh -s -- --server http://<server> --token <token>
+```
+
+```powershell
+iwr -useb http://<server>/install.ps1 | iex; Install-SysSentient -Server http://<server> -Token <token>
+```
+
+That fetches the release matching the machine, **verifies it against the
+published checksums** — an unverified binary is refused, not warned about —
+installs it, enrols, and registers a service.
+
+On a machine that already has the binary:
 
 ```bash
 sys-sentient agent join --server https://monitor.example.com --token <token> --install-service

@@ -736,7 +736,10 @@ export interface IssuedJoinToken {
   id: string;
   label: string;
   expires_at: string;
+  /** For a machine that already has the binary. */
   command: string;
+  /** For a machine with nothing installed, keyed by platform family. */
+  bootstrap?: { unix?: string; windows?: string };
 }
 
 export async function fetchAgents(): Promise<FleetAgent[]> {

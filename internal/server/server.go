@@ -171,6 +171,12 @@ func (s *Server) routes() http.Handler {
 	// Enrolment. Redeeming a token is unauthenticated by necessity — the token
 	// is the only credential a machine has before it joins — so it is rate
 	// limited to blunt brute-force guessing.
+	// Unauthenticated by necessity, like the join endpoint: a machine that has
+	// not enrolled has no credential, and the script alone grants nothing --
+	// enrolling still needs a single-use token.
+	mux.HandleFunc("GET /install.sh", s.handleInstallScript)
+	mux.HandleFunc("GET /install.ps1", s.handleInstallScript)
+
 	mux.HandleFunc("POST /api/agents/join", rateLimit(s.loginLimiter, "12", s.handleAgentJoin))
 	mux.HandleFunc("GET /api/agents", s.requireAuth(s.handleListAgents))
 	mux.HandleFunc("POST /api/agents/tokens", s.requireAdmin(s.handleCreateJoinToken))
