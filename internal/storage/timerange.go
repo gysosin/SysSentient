@@ -83,33 +83,56 @@ func ResolveResolution(r Range, rawRetention time.Duration, now time.Time) strin
 // This is the read the dashboard never had: every other raw accessor is
 // "newest N", which is why the console could only ever show the last few
 // minutes no matter how much history the database held.
+//
+// When the window holds more samples than the caller can take, they are
+// decimated evenly across it rather than truncated. A plain LIMIT returns the
+// oldest N — a six-hour request answered with thirty-three minutes of data,
+// labelled as six hours, which is worse than refusing.
 func (s *Store) QueryRange(hostID string, r Range, limit int) ([]models.SystemState, error) {
 	if err := r.validate(); err != nil {
 		return nil, err
 	}
+	capped := clampLimit(limit)
 
-	query := `
-		SELECT timestamp, cpu_usage, COALESCE(cpu_per_core, '[]'), memory_used, memory_total,
-		       COALESCE(swap_used, 0), COALESCE(swap_total, 0),
-		       disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0),
-		       net_sent_bytes, net_recv_bytes,
-		       COALESCE(load_avg_1, 0), COALESCE(load_avg_5, 0), COALESCE(load_avg_15, 0),
-		       temperature, top_processes, COALESCE(processes, '[]'),
-		       COALESCE(uptime_seconds, 0), COALESCE(hostname, ''),
-		       COALESCE(filesystems, '[]'), COALESCE(host_id, ''),
-		       COALESCE(memory_cached, 0), COALESCE(memory_buffers, 0),
-		       COALESCE(process_count, 0)
-		FROM metrics
-		WHERE timestamp >= ? AND timestamp <= ?`
+	where := ` WHERE timestamp >= ? AND timestamp <= ?`
 	args := []any{sqlTime(r.From), sqlTime(r.To)}
 	if hostID != "" {
-		query += ` AND host_id = ?`
+		where += ` AND host_id = ?`
 		args = append(args, hostID)
 	}
-	// Ascending, so callers plot without reversing. The newest-N readers sort
-	// descending because they are answering "what is happening now".
-	query += ` ORDER BY timestamp ASC LIMIT ?`
-	args = append(args, clampLimit(limit))
+
+	// The stride is computed inside the query so the whole thing stays one
+	// round trip: COUNT(*) OVER () gives every row the window's total.
+	query := `
+		SELECT timestamp, cpu_usage, cpu_per_core, memory_used, memory_total,
+		       swap_used, swap_total, disk_read_bytes, disk_write_bytes, disk_iops,
+		       net_sent_bytes, net_recv_bytes, load_avg_1, load_avg_5, load_avg_15,
+		       temperature, top_processes, processes, uptime_seconds, hostname,
+		       filesystems, host_id, memory_cached, memory_buffers, process_count
+		FROM (
+			SELECT timestamp, cpu_usage, COALESCE(cpu_per_core, '[]') AS cpu_per_core,
+			       memory_used, memory_total,
+			       COALESCE(swap_used, 0) AS swap_used, COALESCE(swap_total, 0) AS swap_total,
+			       disk_read_bytes, disk_write_bytes, COALESCE(disk_iops, 0) AS disk_iops,
+			       net_sent_bytes, net_recv_bytes,
+			       COALESCE(load_avg_1, 0) AS load_avg_1, COALESCE(load_avg_5, 0) AS load_avg_5,
+			       COALESCE(load_avg_15, 0) AS load_avg_15,
+			       temperature, top_processes, COALESCE(processes, '[]') AS processes,
+			       COALESCE(uptime_seconds, 0) AS uptime_seconds,
+			       COALESCE(hostname, '') AS hostname,
+			       COALESCE(filesystems, '[]') AS filesystems,
+			       COALESCE(host_id, '') AS host_id,
+			       COALESCE(memory_cached, 0) AS memory_cached,
+			       COALESCE(memory_buffers, 0) AS memory_buffers,
+			       COALESCE(process_count, 0) AS process_count,
+			       ROW_NUMBER() OVER (ORDER BY timestamp) - 1 AS rn,
+			       COUNT(*) OVER () AS total
+			FROM metrics` + where + `
+		)
+		WHERE rn % MAX(1, (total + ? - 1) / ?) = 0
+		ORDER BY timestamp ASC
+		LIMIT ?`
+	args = append(args, capped, capped, capped)
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {

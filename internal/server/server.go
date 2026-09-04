@@ -321,6 +321,32 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusInternalServerError, "failed to load metrics")
 			return
 		}
+
+		// A rollup tier only holds data old enough to have been aggregated, so
+		// on a young install every tier is empty and a 24-hour window renders
+		// as "no data" beside a database full of samples.
+		//
+		// Fall back to raw over the part of the window raw can still answer,
+		// and report that narrower window back rather than labelling an hour
+		// of samples as thirty days.
+		if len(points) == 0 {
+			rawStart := now.Add(-s.rawRetention())
+			if q.Range.To.After(rawStart) {
+				covered := storage.Range{From: q.Range.From, To: q.Range.To}
+				if covered.From.Before(rawStart) {
+					covered.From = rawStart
+				}
+				metrics, rawErr := s.store.QueryRange(q.HostID, covered, q.Limit)
+				if rawErr == nil && len(metrics) > 0 {
+					resp.Resolution = storage.ResolutionRaw
+					resp.From, resp.To = covered.From, covered.To
+					resp.Metrics, resp.Count = metrics, len(metrics)
+					setProtectedJSONHeaders(w)
+					writeJSONBody(w, resp)
+					return
+				}
+			}
+		}
 		resp.Metrics, resp.Count = points, len(points)
 	}
 
