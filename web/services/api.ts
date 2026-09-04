@@ -1080,3 +1080,44 @@ export async function resetAlertRule(id: string): Promise<AlertRuleView[]> {
     if (!res.ok) throw new Error((await res.text()).trim() || 'Could not reset the rule');
     return (await res.json()) as AlertRuleView[];
 }
+
+/** One turn of an assistant conversation. */
+export interface ChatMessage {
+    role: 'user' | 'model';
+    text: string;
+}
+
+/** The assistant's answer, plus the tools it consulted to reach it. */
+export interface ChatReply {
+    text: string;
+    tool_calls: string[];
+}
+
+/**
+ * Asks the assistant a question.
+ *
+ * The whole history is re-sent because the server holds no session: a
+ * conversation that lived on the server would need eviction, expiry and a
+ * per-user store for something the client already has.
+ */
+export async function askAssistant(question: string, history: ChatMessage[]): Promise<ChatReply> {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, history }),
+        // A question can drive several model calls and a handful of database
+        // queries, so it outlives the default request timeout.
+        timeoutMs: 120000,
+    });
+    if (!res.ok) {
+        const body = await res.text();
+        try {
+            throw new Error((JSON.parse(body) as { error?: string }).error ?? 'The assistant failed');
+        } catch (e) {
+            throw e instanceof Error && e.message !== 'Unexpected end of JSON input'
+                ? e
+                : new Error(body.trim() || 'The assistant failed');
+        }
+    }
+    return (await res.json()) as ChatReply;
+}

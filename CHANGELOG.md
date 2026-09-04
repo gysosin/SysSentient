@@ -9,6 +9,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **An assistant that queries your data.** The AI was one-shot: a single call
+  over one snapshot, with no way to look anything up, so "why was it slow at
+  3pm?" was unanswerable. It now has a read-only tool surface — metric windows,
+  processes at an instant, hosts, alerts, logs, past analyses — and calls them
+  in a loop, looking up more based on what it finds. Every answer shows which
+  tools produced it, because an answer you cannot check is a guess with better
+  formatting. Read-only throughout: suggested commands remain suggestions you
+  run yourself, tool results pass through the same PII scrubbing as the
+  one-shot analysis, and the daily spend cap covers every call in the loop.
+
+### Added
+
 - **A Hosts screen.** "Host" meant three unreconciled things — a hostname on a
   sample, a row from `/api/hosts`, and an enrolled agent — with no page listing
   any of them, and a switcher that stayed hidden until a second machine
