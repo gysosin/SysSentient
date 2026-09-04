@@ -338,16 +338,19 @@ func main() {
 						}
 						scrubbedLogs := scrubber.SanitizeLog(rawLogs)
 
-						insight, err := aiService.AnalyzeSystemState(ctx, scrubber.SanitizeState(*state), scrubbedLogs)
+						insight, cached, err := aiService.AnalyzeSystemState(ctx, scrubber.SanitizeState(*state), scrubbedLogs)
 						if err != nil {
 							logger.Error("error analyzing system state", "error", err)
 							return
 						}
 
 						logger.Info("AI insight generated", "summary", formatInsightLogSummary(insight))
-						// Persist insight history for dashboard retrieval.
-						if err := store.SaveInsight(insight); err != nil {
-							logger.Error("error saving insight", "error", err)
+						// Persist insight history for dashboard retrieval. A
+						// cache hit is the same answer already on file.
+						if !cached {
+							if err := store.SaveInsightRecord(insight, state.HostID, time.Now()); err != nil {
+								logger.Error("error saving insight", "error", err)
+							}
 						}
 					}(ctx)
 				}

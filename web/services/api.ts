@@ -50,6 +50,10 @@ interface RawSystemState {
 }
 
 interface InsightRecord {
+    id?: number;
+    timestamp?: string;
+    host_id?: string;
+    status?: string;
     content?: string;
 }
 
@@ -155,37 +159,68 @@ export const triggerAnalysis = async (): Promise<AIAnalysisResult> => {
     });
 }
 
-export const fetchLatestInsight = async (): Promise<AIAnalysisResult | null> => {
-    try {
-        const response = await fetchWithTimeout(`${API_BASE_URL}/insights`);
-        if (!response.ok) throw new Error('Failed to fetch insights');
-        const data = await response.json() as InsightRecord[]; // Array of {timestamp, content}
-
-        if (Array.isArray(data) && data.length > 0 && data[0].content) {
-            // Content is a JSON string now
-            try {
-                const parsed = JSON.parse(data[0].content) as unknown;
-                return normalizeAnalysisResult(parsed, {
-                    fallbackStatus: 'Warning',
-                    fallbackSummary: 'Recent Insight',
-                    fallbackDetails: 'No details provided',
-                });
-            } catch (parseErr) {
-                // Fallback for old insights that were plain text
-                return {
-                    status: 'Healthy',
-                    summary: "Legacy Insight",
-                    detailedAnalysis: data[0].content,
-                    recommendedActions: []
-                };
-            }
-        }
-        return null;
-    } catch (e) {
-        console.error("API Error fetchLatestInsight", e);
-        return null;
-    }
+/** One stored analysis, with the metadata a timeline needs. */
+export interface InsightEntry {
+    id: number;
+    timestamp: number;
+    hostId: string;
+    status: string;
+    analysis: AIAnalysisResult;
 }
+
+/** Turns one stored row into a displayable analysis. */
+function toInsightEntry(record: InsightRecord): InsightEntry | null {
+    if (!record?.content) return null;
+
+    let analysis: AIAnalysisResult;
+    try {
+        analysis = normalizeAnalysisResult(JSON.parse(record.content) as unknown, {
+            fallbackStatus: 'Warning',
+            fallbackSummary: 'Recent Insight',
+            fallbackDetails: 'No details provided',
+        });
+    } catch {
+        // Insights written before the analysis was structured are plain text.
+        analysis = {
+            status: 'Healthy',
+            summary: 'Legacy Insight',
+            detailedAnalysis: record.content,
+            recommendedActions: [],
+        };
+    }
+
+    const parsedAt = record.timestamp ? Date.parse(record.timestamp) : NaN;
+    return {
+        id: finiteNumber(record.id),
+        timestamp: Number.isFinite(parsedAt) ? parsedAt : 0,
+        hostId: record.host_id ?? '',
+        status: record.status ?? analysis.status,
+        analysis,
+    };
+}
+
+/**
+ * Loads stored analyses, newest first.
+ *
+ * The previous reader took `data[0].content` and discarded the rest, so the
+ * server's ten most recent became one and there was no history to show.
+ */
+export const fetchInsightHistory = async (hostID = '', limit = 25): Promise<InsightEntry[]> => {
+    try {
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (hostID) params.set('host', hostID);
+
+        const response = await fetchWithTimeout(`${API_BASE_URL}/insights?${params}`);
+        if (!response.ok) throw new Error('Failed to fetch insights');
+
+        const data = (await response.json()) as InsightRecord[];
+        if (!Array.isArray(data)) return [];
+        return data.map(toInsightEntry).filter((e): e is InsightEntry => e !== null);
+    } catch (e) {
+        console.error('API Error fetchInsightHistory', e);
+        return [];
+    }
+};
 
 export const fetchRecentLogs = async (): Promise<LogEntry[]> => {
     try {

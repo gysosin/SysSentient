@@ -1,5 +1,8 @@
 export const REFRESH_RATE_MS = 2000; // 2 seconds
 export const LOG_REFRESH_RATE_MS = 10000; // 10 seconds
+// Analyses appear rarely, so the timeline is polled far more slowly than the
+// metric feed.
+export const INSIGHT_REFRESH_RATE_MS = 30000; // 30 seconds
 
 const viteEnv = import.meta.env ?? {};
 

@@ -31,6 +31,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [23](23-server-mode-maintenance.md) | Make server mode a first-class citizen | done |
 | [24](24-time-range-queries.md) | Time-range query engine | done |
 | [27](27-process-accuracy.md) | Make processes true | done |
+| [30](30-insight-history.md) | Insight history | done |
 
 ## Working agreement
 

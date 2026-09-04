@@ -206,6 +206,8 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 }
 
 const (
+	// defaultInsightLimit is one page of the analysis timeline.
+	defaultInsightLimit = 25
 	// defaultMetricsLimit matches what the dashboard charts render.
 	defaultMetricsLimit = 50
 	// maxMetricsLimit bounds a single query so one request cannot pull an
@@ -326,8 +328,30 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSONBody(w, resp)
 }
 
+// handleInsights returns stored analyses, newest first.
+//
+// It used to accept nothing and hardcode a limit of 10, so the dashboard could
+// neither page back through history nor ask which host an analysis was about.
 func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
-	insights, err := s.store.GetRecentInsights(10)
+	q, err := parseRangeQuery(r, s.rawRetention(), time.Now())
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	query := storage.InsightQuery{
+		HostID: q.HostID,
+		Status: r.URL.Query().Get("status"),
+		Limit:  q.Limit,
+	}
+	if query.Limit == 0 {
+		query.Limit = defaultInsightLimit
+	}
+	if q.Bounded {
+		query.Range = q.Range
+	}
+
+	insights, err := s.store.ListInsights(query)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to load insights")
 		return
@@ -383,17 +407,20 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 
 	// Process names and TopProcesses carry paths, hostnames and argv-derived
 	// secrets; they are interpolated straight into the prompt.
-	insight, err := s.aiService.AnalyzeSystemState(r.Context(), s.scrubber.SanitizeState(state), logs)
+	insight, cached, err := s.aiService.AnalyzeSystemState(r.Context(), s.scrubber.SanitizeState(state), logs)
 	if err != nil {
 		slog.Error("error analyzing system state", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "AI analysis failed")
 		return
 	}
 
-	// Save it
-	if err := s.store.SaveInsight(insight); err != nil {
-		// Log error but return success to user
-		slog.Error("error saving insight", "error", err)
+	// A cache hit is the same answer already on file. Storing it again filled
+	// the history with identical rows under different timestamps.
+	if !cached {
+		if err := s.store.SaveInsightRecord(insight, state.HostID, time.Now()); err != nil {
+			// Log error but return success to user
+			slog.Error("error saving insight", "error", err)
+		}
 	}
 
 	setProtectedJSONHeaders(w)
