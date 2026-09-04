@@ -3,10 +3,18 @@ import { afterEach, expect, test, vi } from 'vitest';
 
 import { ExportButton } from './ExportButton';
 
-const exportMetrics = vi.fn(async () => undefined);
+interface ExportCall {
+  format: string;
+  from?: Date;
+  to?: Date;
+  hostID?: string;
+  resolution?: string;
+}
+
+const exportMetrics = vi.fn<(options: ExportCall) => Promise<void>>(async () => undefined);
 
 vi.mock('../services/api', () => ({
-  exportMetrics: (...args: unknown[]) => exportMetrics(...(args as [never])),
+  exportMetrics: (options: ExportCall) => exportMetrics(options),
 }));
 
 const dashboard = {
@@ -30,7 +38,7 @@ test('exports the live window without bounds, so retention decides the span', as
   fireEvent.click(screen.getByText('CSV'));
 
   await waitFor(() => expect(exportMetrics).toHaveBeenCalledTimes(1));
-  const call = exportMetrics.mock.calls[0][0] as Record<string, unknown>;
+  const call = exportMetrics.mock.calls[0][0];
   expect(call.format).toBe('csv');
   expect(call.from).toBeUndefined();
   // Live has no resolution of its own to pin.
@@ -46,7 +54,7 @@ test('exports exactly the selected window and tier', async () => {
   fireEvent.click(screen.getByText('JSON'));
 
   await waitFor(() => expect(exportMetrics).toHaveBeenCalledTimes(1));
-  const call = exportMetrics.mock.calls[0][0] as Record<string, unknown>;
+  const call = exportMetrics.mock.calls[0][0];
   // What is exported must be what is on screen; a mismatch here means the
   // file does not describe the chart the operator was looking at.
   expect(call.format).toBe('json');
