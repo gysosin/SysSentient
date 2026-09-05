@@ -77,3 +77,14 @@ than assuming it worked: it committed with no git identity (a wiki clone
 inherits neither this repository's config nor necessarily a global one), and
 its `[A-Z]*.md` glob published `README.md` as a wiki page despite a comment
 claiming it excluded it.
+
+
+## The content no longer depends on the wiki
+
+FAQ and troubleshooting were only reachable as wiki source, so they were
+invisible until someone created the wiki's first page by hand. They are now
+`docs/FAQ.md` and `docs/TROUBLESHOOTING.md`, linked from the README and the docs
+index, and rendered on GitHub like every other page in the tree.
+
+`docs/wiki/` and `tool/publish_wiki.sh` remain for whoever wants the wiki tab
+populated. Nothing is unreachable while that stays undone.
