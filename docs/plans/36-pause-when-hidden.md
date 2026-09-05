@@ -67,7 +67,11 @@ sees.
   DOM-mutation probe reads ~0/s against 43–76 before; showing the tab restores
   LIVE within a few seconds with no gap in the charts.
 
-## Not done, on purpose — measured, available on request
+## Not done in this shard — all since closed
+
+Everything below was left for later when this shard landed. It was all done in
+[37-visible-tab-render-cost.md](37-visible-tab-render-cost.md), except the
+`scanline`, whose entry here overstated the cost — the correction is inline.
 
 The visible tab still does ~163 DOM mutations a second while idle, all of it
 waste with no visible effect. Ranked by measured impact:
