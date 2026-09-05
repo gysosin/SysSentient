@@ -20,9 +20,15 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Setup from './pages/Setup';
 
-/** Reads shared state so the shell can render feed status in the header. */
+/**
+ * Reads shared state for the chrome.
+ *
+ * Deliberately does NOT read the feed: that ticks every second, and this
+ * component renders AppShell, which renders the routed page. Feed status is
+ * subscribed to by small leaf components inside AppShell instead.
+ */
 const Shell: React.FC = () => {
-  const { feed, current, hosts, selectedHost, selectHost, firingAlerts, frozen, toggleFreeze } =
+  const { current, hosts, selectedHost, selectHost, firingAlerts, frozen, toggleFreeze } =
     useDashboard();
   const { user, signOut } = useAuth();
   const [theme, toggleTheme] = useTheme();
@@ -39,7 +45,6 @@ const Shell: React.FC = () => {
         onToggleTheme={toggleTheme}
       />
       <AppShell
-        feed={feed}
         hostname={current.hostname || 'unknown host'}
         uptimeLabel={formatDuration(current.uptimeSeconds)}
         hosts={hosts}

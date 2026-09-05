@@ -22,6 +22,7 @@ import { AuthUser } from '../services/api';
 import { cn } from '../lib/utils';
 import { NotificationCenter } from './NotificationCenter';
 import { RangePicker } from './RangePicker';
+import { useFeed } from '../hooks/useDashboardData';
 import { UserMenu } from './UserMenu';
 import { Button } from './ui/button';
 import {
@@ -68,8 +69,93 @@ function lastSyncLabel(ageMs: number): string {
   return new Date(Date.now() - ageMs).toISOString().slice(11, 19);
 }
 
+/**
+ * The live/stale chip.
+ *
+ * Its own component because it reads the feed, which republishes every second.
+ * AppShell wraps the routed page, so if AppShell subscribed to the feed the
+ * whole page -- charts included -- would re-render once a second to update this
+ * one string.
+ */
+const FeedChip: React.FC = () => {
+  const feed = useFeed();
+  const tone = FEED_TONE[feed.level];
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded-md border px-2.5 py-2 text-2xs font-semibold tracking-wider',
+        tone.chip,
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      <span className={cn('size-2 shrink-0 rounded-full', tone.dot)} aria-hidden="true" />
+      <span>{feed.label}</span>
+      <span className="text-mute hidden font-mono font-normal sm:inline">{feed.detail}</span>
+    </div>
+  );
+};
+
+/** The last-sync clock, isolated for the same reason as FeedChip. */
+const LastSync: React.FC = () => {
+  const feed = useFeed();
+  return <span className="text-foreground">{lastSyncLabel(feed.ageMs)} UTC</span>;
+};
+
+/** The stale/no-data banner, isolated for the same reason as FeedChip. */
+const DegradedBanner: React.FC = () => {
+  const feed = useFeed();
+  const [dismissed, setDismissed] = React.useState(false);
+  const degraded = feed.level === 'stale' || feed.level === 'down';
+
+  // A dismissed banner must come back when the feed recovers and breaks again,
+  // otherwise one click permanently silences the console's most important
+  // warning.
+  React.useEffect(() => {
+    if (!degraded) setDismissed(false);
+  }, [degraded]);
+
+  return (
+    <AnimatePresence>
+      {degraded && !dismissed && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          className={cn(
+            'overflow-hidden border-b',
+            feed.level === 'stale'
+              ? 'border-warn/40 bg-warn-soft text-warn'
+              : 'border-crit/40 bg-crit-soft text-crit',
+          )}
+          role="alert"
+        >
+          <div className="flex w-full items-center gap-3 px-4 py-2.5 text-2xs sm:px-6">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0">
+              <strong className="tracking-wider uppercase">
+                {feed.level === 'stale' ? 'Stale data' : 'No data'}
+              </strong>{' '}
+              {feed.level === 'stale'
+                ? `Feed stale — ${feed.detail}. The values below are not current.`
+                : 'No data received from the daemon. Check that sys-daemon is running and reachable.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setDismissed(true)}
+              className="ml-auto shrink-0 rounded p-1 hover:bg-current/10"
+              aria-label="Dismiss feed warning"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
 interface Props {
-  feed: FeedStatus;
   hostname: string;
   uptimeLabel: string;
   hosts: FleetHost[];
@@ -170,7 +256,6 @@ function NavItems({
 }
 
 const AppShell: React.FC<Props> = ({
-  feed,
   hostname,
   uptimeLabel,
   hosts,
@@ -186,16 +271,6 @@ const AppShell: React.FC<Props> = ({
   onShowShortcuts,
 }) => {
   const location = useLocation();
-  const tone = FEED_TONE[feed.level];
-  const [bannerDismissed, setBannerDismissed] = React.useState(false);
-  const degraded = feed.level === 'stale' || feed.level === 'down';
-
-  // A dismissed banner must come back when the feed recovers and breaks again,
-  // otherwise one click permanently silences the console's most important
-  // warning.
-  React.useEffect(() => {
-    if (!degraded) setBannerDismissed(false);
-  }, [degraded]);
 
   return (
     <div className="gridbg text-foreground flex min-h-screen flex-col">
@@ -226,20 +301,7 @@ const AppShell: React.FC<Props> = ({
           </div>
 
           <div className="ml-auto flex items-center gap-2.5 sm:gap-3">
-            <div
-              className={cn(
-                'flex items-center gap-2 rounded-md border px-2.5 py-2 text-2xs font-semibold tracking-wider',
-                tone.chip,
-              )}
-              role="status"
-              aria-live="polite"
-            >
-              <span className={cn('size-2 shrink-0 rounded-full', tone.dot)} aria-hidden="true" />
-              <span>{feed.label}</span>
-              <span className="text-mute hidden font-mono font-normal sm:inline">
-                {feed.detail}
-              </span>
-            </div>
+            <FeedChip />
 
             {/* The window every chart draws. Beside the feed chip because the
                 two together answer "what am I looking at, and is it current". */}
@@ -339,7 +401,7 @@ const AppShell: React.FC<Props> = ({
         <span className="text-melt tabular ml-auto flex shrink-0 items-center gap-2 font-mono text-2xs tracking-wider uppercase">
           Uptime <span className="text-foreground">{uptimeLabel}</span>
           <span className="text-line">/</span>
-          Last sync <span className="text-foreground">{lastSyncLabel(feed.ageMs)} UTC</span>
+          Last sync <LastSync />
         </span>
       </div>
 
@@ -371,42 +433,7 @@ const AppShell: React.FC<Props> = ({
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {degraded && !bannerDismissed && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className={cn(
-              'overflow-hidden border-b',
-              feed.level === 'stale'
-                ? 'border-warn/40 bg-warn-soft text-warn'
-                : 'border-crit/40 bg-crit-soft text-crit',
-            )}
-            role="alert"
-          >
-            <div className="flex w-full items-center gap-3 px-4 py-2.5 text-2xs sm:px-6">
-              <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-              <span className="min-w-0">
-                <strong className="tracking-wider uppercase">
-                  {feed.level === 'stale' ? 'Stale data' : 'No data'}
-                </strong>{' '}
-                {feed.level === 'stale'
-                  ? `Feed stale — ${feed.detail}. The values below are not current.`
-                  : 'No data received from the daemon. Check that sys-daemon is running and reachable.'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setBannerDismissed(true)}
-                className="ml-auto shrink-0 rounded p-1 hover:bg-current/10"
-                aria-label="Dismiss feed warning"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <DegradedBanner />
 
       {/* pb-24 on phones keeps the last panel clear of the fixed tab bar. */}
       <main

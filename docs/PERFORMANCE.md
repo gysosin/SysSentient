@@ -184,6 +184,18 @@ second and ~3 MB/s of allocation with nobody looking, which is what made Chrome
 flag the tab. Showing the tab reconnects immediately and refreshes every poller
 once, so the view catches up rather than waiting out a reconnect backoff.
 
+### Render cost while visible
+
+The console does not re-render on a clock. The "updated Ns ago" readout ticks
+every second, but it lives on its own React context, so only the few small
+components that display it redraw — not the charts, tiles or sparklines.
+
+This is guarded by a test rather than by discipline:
+`web/hooks/useDashboardData.rerender.test.tsx` counts how often a consumer that
+ignores the feed is re-rendered over ten simulated seconds. It was 10, one per
+tick; it is now 0. A companion test asserts the feed readout still updates every
+second, so the guard cannot be satisfied by simply breaking the clock.
+
 ## Still open
 
 - Collection remains synchronous with the tick. It no longer blocks for half a

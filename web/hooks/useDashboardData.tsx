@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AIAnalysisResult,
   FeedStatus,
@@ -71,7 +71,6 @@ interface DashboardData {
   hasData: boolean;
   processes: Process[];
   logs: LogEntry[];
-  feed: FeedStatus;
   /** True while the stream is deliberately held still for inspection. */
   frozen: boolean;
   toggleFreeze: () => void;
@@ -94,6 +93,30 @@ interface DashboardData {
 }
 
 const DashboardContext = createContext<DashboardData | null>(null);
+
+/**
+ * The feed badge, on its own context because it ticks every second.
+ *
+ * It used to live in the main context value, so a tick published a new object
+ * to all eleven consumers -- four charts among them -- purely to update the
+ * "updated Ns ago" string that two small pieces of UI display.
+ */
+const FeedContext = createContext<FeedStatus | null>(null);
+
+/**
+ * Subscribes to the feed badge alone.
+ *
+ * A component that calls this re-renders every second by design. Keep those
+ * components as small as possible, and never call it from one that renders
+ * charts or tables.
+ */
+export function useFeed(): FeedStatus {
+  const ctx = useContext(FeedContext);
+  if (!ctx) {
+    throw new Error('useFeed must be used inside <DashboardProvider>');
+  }
+  return ctx;
+}
 
 export function useDashboard(): DashboardData {
   const ctx = useContext(DashboardContext);
@@ -333,11 +356,17 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const liveProcesses = connected ? wsProcesses : polledProcesses;
 
+  // What a freeze would capture, kept in a ref so the callback below can have
+  // a stable identity. Its dependencies changed on every frame, which made it
+  // a new function twice a second and re-published the context on its own.
+  const snapshotRef = useRef({ history: metricsHistory, processes: liveProcesses, logs });
+  useEffect(() => {
+    snapshotRef.current = { history: metricsHistory, processes: liveProcesses, logs };
+  });
+
   const toggleFreeze = useCallback(() => {
-    setFrozen((prev) =>
-      prev ? null : { history: metricsHistory, processes: liveProcesses, logs },
-    );
-  }, [metricsHistory, liveProcesses, logs]);
+    setFrozen((prev) => (prev ? null : snapshotRef.current));
+  }, []);
 
   const value = useMemo<DashboardData>(() => {
     // A selected window replaces the live tail. Freeze still wins, because
@@ -349,24 +378,6 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         : rangeMetrics;
     const hasData = shownHistory.length > 0;
     const current = hasData ? shownHistory[shownHistory.length - 1] : EMPTY_METRIC;
-    // Age is measured against the live sample even while frozen, so the feed
-    // badge keeps telling the truth about the daemon rather than about the
-    // snapshot on screen.
-    const liveCurrent = metricsHistory.length > 0 ? metricsHistory[metricsHistory.length - 1] : null;
-    const ageMs = liveCurrent ? Math.max(0, now - liveCurrent.timestamp) : Infinity;
-    const ageSeconds = Math.round(ageMs / 1000);
-
-    let feed: FeedStatus;
-    if (!liveCurrent) {
-      feed = { level: 'down', label: 'NO DATA', detail: 'awaiting first sample', ageMs };
-    } else if (ageMs > STALE_AFTER_MS) {
-      feed = { level: 'stale', label: 'STALE', detail: `no update for ${ageSeconds}s`, ageMs };
-    } else if (connected) {
-      feed = { level: 'live', label: 'LIVE', detail: `updated ${ageSeconds}s ago`, ageMs };
-    } else {
-      feed = { level: 'polling', label: 'POLLING', detail: `updated ${ageSeconds}s ago`, ageMs };
-    }
-
     return {
       hosts,
       firingAlerts,
@@ -377,7 +388,6 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       hasData,
       processes: frozen ? frozen.processes : liveProcesses,
       logs: frozen ? frozen.logs : logs,
-      feed,
       frozen: frozen !== null,
       toggleFreeze,
       range,
@@ -389,7 +399,39 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
     // `run` is stable enough for this provider's lifetime; excluded deliberately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metricsHistory, now, connected, liveProcesses, logs, aiResult, insightHistory, isAiLoading, aiError, range, selectPreset, zoomTo, reset, rangeResolution, isLive, rangeMetrics, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
+  }, [metricsHistory, connected, liveProcesses, logs, aiResult, insightHistory, isAiLoading, aiError, range, selectPreset, zoomTo, reset, rangeResolution, isLive, rangeMetrics, hosts, selectedHost, firingAlerts, frozen, toggleFreeze]);
 
-  return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
+  /**
+   * The feed badge, republished every second by the clock tick.
+   *
+   * Deliberately a separate context. This used to live in the main value, so a
+   * tick published a new object to all eleven consumers -- four charts among
+   * them -- to update a string that only the header chip and the hero line
+   * display. Anything that needs the age now subscribes here instead, and the
+   * rest of the console re-renders only when its data actually changes.
+   */
+  const feed = useMemo<FeedStatus>(() => {
+    // Measured against the live sample even while frozen, so the badge keeps
+    // telling the truth about the daemon rather than about the snapshot.
+    const liveCurrent = metricsHistory.length > 0 ? metricsHistory[metricsHistory.length - 1] : null;
+    const ageMs = liveCurrent ? Math.max(0, now - liveCurrent.timestamp) : Infinity;
+    const ageSeconds = Math.round(ageMs / 1000);
+
+    if (!liveCurrent) {
+      return { level: 'down', label: 'NO DATA', detail: 'awaiting first sample', ageMs };
+    }
+    if (ageMs > STALE_AFTER_MS) {
+      return { level: 'stale', label: 'STALE', detail: `no update for ${ageSeconds}s`, ageMs };
+    }
+    if (connected) {
+      return { level: 'live', label: 'LIVE', detail: `updated ${ageSeconds}s ago`, ageMs };
+    }
+    return { level: 'polling', label: 'POLLING', detail: `updated ${ageSeconds}s ago`, ageMs };
+  }, [metricsHistory, now, connected]);
+
+  return (
+    <DashboardContext.Provider value={value}>
+      <FeedContext.Provider value={feed}>{children}</FeedContext.Provider>
+    </DashboardContext.Provider>
+  );
 };

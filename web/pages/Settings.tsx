@@ -11,7 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 
-import { useDashboard } from '../hooks/useDashboardData';
+import { useDashboard, useFeed } from '../hooks/useDashboardData';
 import { useAuth } from '../hooks/useAuth';
 import { usePageVisible } from '../hooks/usePageVisible';
 import {
@@ -75,7 +75,8 @@ const Row: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = 
 );
 
 const Settings: React.FC = () => {
-  const { current, feed, hosts } = useDashboard();
+  const { current, hosts } = useDashboard();
+  const feed = useFeed();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const visible = usePageVisible();

@@ -42,6 +42,7 @@ own. Work them roughly in order; dependencies are stated in each file.
 | [34](34-packaging-polish.md) | One package, for people who don't live in a terminal | done |
 | [35](35-archiving.md) | Archiving, so the disk does not fill | done |
 | [36](36-pause-when-hidden.md) | Stop the dashboard working while nobody is looking | done |
+| [37](37-visible-tab-render-cost.md) | Stop re-rendering the console once a second | done |
 
 ## Working agreement
 

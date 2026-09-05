@@ -9,6 +9,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The console re-rendered itself once a second while idle.** A clock tick
+  driving the "updated Ns ago" readout sat in the dashboard context's
+  dependency list, so every second React re-rendered all eleven consumers —
+  four charts, eight tiles and seven sparklines among them — to update a string
+  shown in two small places. Measured at 10 consumer renders per 10 seconds
+  with no data arriving; now 0. The feed badge moved to its own context, the
+  animated numbers write the DOM through motion instead of React state, the
+  charts are memoised, and the sparkline series are computed once per data
+  change rather than once per render.
+
+### Fixed
+
 - **The dashboard did all of its work in a background tab.** Chrome flagged the
   tab as "using extra resources": measured at 43–76 DOM mutations a second, six
   long tasks in nine seconds and ~3 MB of garbage allocated per second, all

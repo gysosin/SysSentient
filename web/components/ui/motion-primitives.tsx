@@ -35,16 +35,17 @@ export function AnimatedNumber({
   const reduced = useReducedMotion();
   const motionValue = useMotionValue(value);
   const spring = useSpring(motionValue, { stiffness: 120, damping: 22, mass: 0.6 });
-  const display = useTransform(spring, (latest) =>
-    Number.isFinite(latest) ? latest.toFixed(decimals) : (0).toFixed(decimals),
-  );
-  const [text, setText] = React.useState(() => value.toFixed(decimals));
-
+  // The suffix is folded into the transform so the element has exactly one
+  // text node. Rendering it as a sibling splits the text across two nodes,
+  // which breaks any lookup that reads an element's own text -- Testing
+  // Library's getByText among them.
+  const display = useTransform(spring, (latest) => {
+    const n = Number.isFinite(latest) ? latest : 0;
+    return `${n.toFixed(decimals)}${suffix}`;
+  });
   React.useEffect(() => {
     motionValue.set(value);
   }, [motionValue, value]);
-
-  React.useEffect(() => display.on('change', (v) => setText(v)), [display]);
 
   if (reduced) {
     return (
@@ -55,12 +56,14 @@ export function AnimatedNumber({
     );
   }
 
-  return (
-    <span className={cn('tabular', className)}>
-      {text}
-      {suffix}
-    </span>
-  );
+  // The MotionValue is rendered directly: motion subscribes and writes the
+  // text node itself. This previously mirrored every spring frame into React
+  // state, so each of the eight numbers on the Overview drove its own render
+  // for roughly three quarters of every two-second cycle -- to change a string
+  // that nothing else on the page depends on.
+  // motion renders a MotionValue child by writing the DOM text node directly,
+  // bypassing React entirely -- but only when it is the sole child.
+  return <motion.span className={cn('tabular', className)}>{display}</motion.span>;
 }
 
 /** Children fade and rise in sequence rather than all at once. */

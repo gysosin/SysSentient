@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowDown, ArrowUp, Search } from 'lucide-react';
 
 import { Process } from '../types';
-import { useDashboard } from '../hooks/useDashboardData';
+import { useDashboard, useFeed } from '../hooks/useDashboardData';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -40,7 +40,11 @@ function formatMemory(proc: { memory: number; memoryBytes: number }): string {
 }
 
 const Processes: React.FC = () => {
-  const { processes, feed, current } = useDashboard();
+  const { processes, current } = useDashboard();
+  // Cheap page: an 18-row table, so it subscribes to the per-second feed
+  // directly rather than through a leaf. Overview does not, because it draws
+  // four charts.
+  const feed = useFeed();
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('cpu');
   const [descending, setDescending] = useState(true);

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Search, Terminal } from 'lucide-react';
 
 import { LogEntry } from '../types';
-import { useDashboard } from '../hooks/useDashboardData';
+import { useDashboard, useFeed } from '../hooks/useDashboardData';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { ScreenHeading } from '../components/ui/section-heading';
@@ -35,7 +35,8 @@ const levelTone = (level: LogEntry['level']) =>
   level === 'ERROR' ? 'text-crit' : level === 'WARN' ? 'text-warn' : 'text-mute';
 
 const Logs: React.FC = () => {
-  const { logs, current, feed } = useDashboard();
+  const { logs, current } = useDashboard();
+  const feed = useFeed();
   const [query, setQuery] = useState('');
   const [enabled, setEnabled] = useState<Set<LogEntry['level']>>(new Set(LEVELS));
 
