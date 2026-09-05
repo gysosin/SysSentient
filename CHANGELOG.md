@@ -17,7 +17,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   with no data arriving; now 0. The feed badge moved to its own context, the
   animated numbers write the DOM through motion instead of React state, the
   charts are memoised, and the sparkline series are computed once per data
-  change rather than once per render.
+  change rather than once per render. The Logs, Settings and Processes screens
+  read the feed through small leaf components too, so none of them redraws a
+  table or a form on a clock tick.
 
 ### Fixed
 

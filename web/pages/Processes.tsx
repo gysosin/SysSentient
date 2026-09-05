@@ -39,12 +39,21 @@ function formatMemory(proc: { memory: number; memoryBytes: number }): string {
   return `${bytes} B`;
 }
 
+/**
+ * The process table's card, dimmed while the feed is stale.
+ *
+ * Takes the table as `children` so this component can re-render every second
+ * without redrawing the rows: `children` is the same element object each time,
+ * so React skips the subtree.
+ */
+const StaleCard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const feed = useFeed();
+  const dimmed = feed.level === 'stale' || feed.level === 'down';
+  return <Card className={cn(dimmed && 'opacity-60')}>{children}</Card>;
+};
+
 const Processes: React.FC = () => {
   const { processes, current } = useDashboard();
-  // Cheap page: an 18-row table, so it subscribes to the per-second feed
-  // directly rather than through a leaf. Overview does not, because it draws
-  // four charts.
-  const feed = useFeed();
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('cpu');
   const [descending, setDescending] = useState(true);
@@ -85,7 +94,6 @@ const Processes: React.FC = () => {
     }
   };
 
-  const dimmed = feed.level === 'stale' || feed.level === 'down';
 
   return (
     <>
@@ -95,7 +103,7 @@ const Processes: React.FC = () => {
         description="The heaviest processes on this machine by CPU and by memory. Sorting and search cover the tracked set below, not every process."
       />
 
-      <Card className={cn(dimmed && 'opacity-60')}>
+      <StaleCard>
       <CardHeader className="flex-wrap gap-2">
         {/* Says plainly that this is a sample. It used to read "10 tracked"
             beside a description promising everything on the machine. */}
@@ -220,7 +228,7 @@ const Processes: React.FC = () => {
           </div>
         )}
       </CardContent>
-      </Card>
+      </StaleCard>
     </>
   );
 };

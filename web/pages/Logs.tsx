@@ -34,9 +34,28 @@ const clockOf = (timestamp: string): string => {
 const levelTone = (level: LogEntry['level']) =>
   level === 'ERROR' ? 'text-crit' : level === 'WARN' ? 'text-warn' : 'text-mute';
 
+/**
+ * The streaming/halted pill.
+ *
+ * Its own component because it reads the feed, which republishes every second.
+ * Consuming that from the page would redraw the whole log list on every tick.
+ */
+const StreamingPill: React.FC = () => {
+  const feed = useFeed();
+  const streaming = feed.level === 'live' || feed.level === 'polling';
+  return (
+    <span className={cn('flex items-center gap-1.5 font-medium', streaming ? 'text-ok' : 'text-mute')}>
+      <span
+        className={cn('size-1.5 rounded-full', streaming ? 'live-pulse bg-ok' : 'bg-melt')}
+        aria-hidden="true"
+      />
+      {streaming ? 'streaming' : 'halted'}
+    </span>
+  );
+};
+
 const Logs: React.FC = () => {
   const { logs, current } = useDashboard();
-  const feed = useFeed();
   const [query, setQuery] = useState('');
   const [enabled, setEnabled] = useState<Set<LogEntry['level']>>(new Set(LEVELS));
 
@@ -66,7 +85,6 @@ const Logs: React.FC = () => {
     );
   }, [logs, query, enabled]);
 
-  const streaming = feed.level === 'live' || feed.level === 'polling';
 
   return (
     <>
@@ -137,21 +155,7 @@ const Logs: React.FC = () => {
                   {rows.length}
                   {rows.length !== logs.length && ` of ${logs.length}`} events
                 </span>
-                <span
-                  className={cn(
-                    'flex items-center gap-1.5 font-medium',
-                    streaming ? 'text-ok' : 'text-mute',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'size-1.5 rounded-full',
-                      streaming ? 'live-pulse bg-ok' : 'bg-melt',
-                    )}
-                    aria-hidden="true"
-                  />
-                  {streaming ? 'streaming' : 'halted'}
-                </span>
+                <StreamingPill />
               </span>
             </div>
 

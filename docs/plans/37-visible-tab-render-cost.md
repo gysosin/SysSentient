@@ -74,9 +74,13 @@ above is the deterministic test, not a browser measurement.
   per-core bars and `Meter`. `transform: scaleX` composites instead, but it
   distorts the rounded ends of a `rounded-full` bar, so it is a visual change
   and needs a design decision rather than a silent swap.
-- **`scanline`** — a 7-second infinite gradient sweep on the Overview hero. It
-  keeps the compositor awake permanently. Purely decorative, so removing it is
-  also a design decision.
-- Logs, Settings and Processes subscribe to the feed at page level rather than
-  through leaves. Each re-renders once a second while open — far cheaper than
-  the Overview's charts, and worth tightening only if it shows up in a profile.
+- **`scanline`** — a 7-second infinite gradient sweep on the Overview hero.
+  I checked the CSS after writing the earlier note: it already animates
+  `transform`, so the compositor handles it and there is no layout or paint
+  cost. What remains is that the tab never reaches a fully idle state.
+  Removing it is a design call, not a performance fix.
+- **~28 springs animating CSS `width`** is the one real item left. Making the
+  bars composited means `transform: scaleX`, which squashes the rounded end cap
+  of a `rounded-full` fill — a visible change, so it needs a design decision
+  rather than a silent swap. The elements are small leaves inside fixed-size
+  parents, so the layout they trigger is contained.

@@ -83,6 +83,9 @@ waste with no visible effect. Ranked by measured impact:
 4. Eight `AnimatedNumber`s each firing React `setState` at frame rate for
    ~75% of every cycle.
 5. Seven `Sparkline`s whose `useMemo` is defeated by a fresh array per render.
-6. `scanline`: a 7-second infinite gradient sweep that never lets a visible
-   Overview idle.
+6. `scanline`: a 7-second infinite gradient sweep on the hero. Corrected
+   after checking the CSS -- it already animates `transform`, which the
+   compositor handles, so its cost is keeping the tab from reaching idle
+   rather than layout or paint work. Removing it is a design call, not a
+   performance fix.
 7. `SystemChart` unmemoised, ~24 Redux dispatches a second across four charts.
