@@ -174,6 +174,16 @@ The archive is written and fsynced before any row is deleted. A crash between
 the two leaves a duplicate archive, which is recoverable; the other order loses
 data.
 
+## Browser tab
+
+The dashboard pauses when its tab is hidden: the WebSocket is closed (so the
+server stops sending frames to that client) and every poller stops. Chrome
+throttles timers in a background tab but not WebSocket messages, so before this
+a hidden tab still processed a frame every two seconds — 43–76 DOM mutations a
+second and ~3 MB/s of allocation with nobody looking, which is what made Chrome
+flag the tab. Showing the tab reconnects immediately and refreshes every poller
+once, so the view catches up rather than waiting out a reconnect backoff.
+
 ## Still open
 
 - Collection remains synchronous with the tick. It no longer blocks for half a

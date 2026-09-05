@@ -7,6 +7,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **The dashboard did all of its work in a background tab.** Chrome flagged the
+  tab as "using extra resources": measured at 43–76 DOM mutations a second, six
+  long tasks in nine seconds and ~3 MB of garbage allocated per second, all
+  while hidden. Chrome throttles timers in a background tab but not WebSocket
+  messages, so a frame still arrived every two seconds and re-rendered the whole
+  application for nobody. The socket is now closed while the tab is hidden and
+  every poller pauses; showing the tab reconnects immediately, bypassing the
+  reconnect backoff, and each poller refreshes once so the view catches up.
+  Visible behaviour is unchanged.
+
 ### Added
 
 - **Archiving.** Retention only ever deleted: raw for a day, one-minute for a

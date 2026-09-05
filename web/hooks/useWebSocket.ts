@@ -68,7 +68,16 @@ interface RawCounters {
     netSentBytes: number;
 }
 
-export function useWebSocket(): UseWebSocketReturn {
+/**
+ * Streams metrics over the socket while `enabled` is true.
+ *
+ * `enabled` is page visibility. Chrome throttles timers in a hidden tab but not
+ * WebSocket messages, so without this a background tab kept receiving a frame
+ * every two seconds and re-rendering the whole application for it. Closing the
+ * socket rather than ignoring frames also stops the server encoding and sending
+ * a frame to this client at all.
+ */
+export function useWebSocket(enabled = true): UseWebSocketReturn {
     const [connected, setConnected] = useState(false);
     const [metricsHistory, setMetricsHistory] = useState<SystemMetrics[]>([]);
     const [processes, setProcesses] = useState<Process[]>([]);
@@ -195,6 +204,22 @@ export function useWebSocket(): UseWebSocketReturn {
     }, [connect]);
 
     useEffect(() => {
+        if (!enabled) {
+            // Hidden: close and stay closed. The cleanup below has already run
+            // for the previous (enabled) pass, so this is belt and braces for
+            // the case where the effect first mounts hidden.
+            shouldReconnectRef.current = false;
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
+            wsRef.current?.close();
+            setConnected(false);
+            return;
+        }
+
+        // Shown again: reconnect now, not after whatever backoff the last
+        // disconnect left behind -- the operator is looking at the screen.
+        reconnectAttemptsRef.current = 0;
         connect();
 
         return () => {
@@ -206,7 +231,7 @@ export function useWebSocket(): UseWebSocketReturn {
                 wsRef.current.close();
             }
         };
-    }, [connect]);
+    }, [connect, enabled]);
 
     return {
         connected,

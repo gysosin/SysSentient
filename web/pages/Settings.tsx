@@ -13,6 +13,7 @@ import {
 
 import { useDashboard } from '../hooks/useDashboardData';
 import { useAuth } from '../hooks/useAuth';
+import { usePageVisible } from '../hooks/usePageVisible';
 import {
   ManagedUser,
   changePassword,
@@ -77,6 +78,7 @@ const Settings: React.FC = () => {
   const { current, feed, hosts } = useDashboard();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const visible = usePageVisible();
 
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -149,6 +151,7 @@ const Settings: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const load = async () => {
       const h = await fetchHealth();
@@ -163,7 +166,7 @@ const Settings: React.FC = () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // The active section lives in the URL hash rather than in component state
   // alone, so a section can be linked to and survives a reload. The account
