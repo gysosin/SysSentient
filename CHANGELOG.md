@@ -7,6 +7,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/FAQ.md` and `docs/TROUBLESHOOTING.md`**, linked from the README and
+  the documentation index. These answers previously existed only as wiki source
+  in `docs/wiki/`, which meant nobody could read them until the GitHub wiki's
+  first page was created by hand — a step with no API. They are now part of the
+  documentation tree, and the wiki stays a convenience mirror.
+
 ### Changed
 
 - **Progress bars are slid rather than stretched.** Around 28 of them — one per

@@ -14,6 +14,8 @@ redacted first.
 [Website](https://gysosin.github.io/SysSentient/) ·
 [Documentation](docs/README.md) ·
 [Install](docs/INSTALL.md) ·
+[FAQ](docs/FAQ.md) ·
+[Troubleshooting](docs/TROUBLESHOOTING.md) ·
 [Changelog](CHANGELOG.md)
 
 > **Status:** pre-1.0. The daemon serves plain HTTP — terminate TLS in front of

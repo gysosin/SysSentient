@@ -3,6 +3,8 @@
 | | |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Packages, containers, building from source |
+| [FAQ.md](FAQ.md) | The questions that come up in use |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | When something is wrong, and what the logs mean |
 | [CONFIGURATION.md](CONFIGURATION.md) | Every setting, and which apply without a restart |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Shape, components, and the decisions behind them |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Agents, servers, and fleets |

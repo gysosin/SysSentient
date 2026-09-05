@@ -1,5 +1,10 @@
 # Wiki source
 
+> **The content here is also published in the docs tree**, which needs no manual
+> step: [FAQ.md](../FAQ.md) and [TROUBLESHOOTING.md](../TROUBLESHOOTING.md).
+> The wiki is a convenience mirror, not the only home — so nothing is
+> unreachable while its first page is uncreated.
+
 These pages are the GitHub wiki's content, kept here so they are reviewed and
 versioned with the code rather than edited only in the wiki's own UI.
 
