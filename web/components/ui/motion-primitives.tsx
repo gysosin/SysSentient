@@ -160,10 +160,13 @@ export function Meter({
       aria-valuemax={100}
       aria-label={label}
     >
+      {/* Slid, not stretched: see the note in Overview's Stat. `x` is a
+          percentage of this element's own width, which is the full track, so
+          -30% reveals 70%. */}
       <motion.div
-        className={cn('h-full rounded-full', fill)}
+        className={cn('h-full w-full rounded-full', fill)}
         initial={false}
-        animate={{ width: `${clamped}%` }}
+        animate={{ x: `-${100 - clamped}%` }}
         transition={EASE_OUT}
       />
     </div>

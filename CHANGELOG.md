@@ -7,6 +7,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Progress bars are slid rather than stretched.** Around 28 of them — one per
+  CPU core, plus every tile fill and meter — animated CSS `width`, forcing
+  layout twice a second. Each fill is now full width with its rounded ends
+  intact and translated left by the remainder, clipped by its track: the same
+  appearance, on the compositor instead of the layout engine.
+
 ### Fixed
 
 - **The console re-rendered itself once a second while idle.** A clock tick

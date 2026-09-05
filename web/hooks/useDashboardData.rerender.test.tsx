@@ -165,3 +165,21 @@ test('no page subscribes to the feed at page level', async () => {
 
   expect(offenders).toEqual([]);
 });
+
+test('single-fill bars animate transform, not width', async () => {
+  // Animating `width` forces layout. With one bar per CPU core plus every tile
+  // and meter, ~28 of them re-ran layout twice a second. The only permitted
+  // width animations are the two segments of the memory split bar, which sit
+  // side by side in flow and cannot be translated independently.
+  const { readFile } = await import('node:fs/promises');
+  const { resolve } = await import('node:path');
+
+  const files = ['pages/Overview.tsx', 'components/ui/motion-primitives.tsx'];
+  let widthAnimations = 0;
+  for (const file of files) {
+    const src = await readFile(resolve(process.cwd(), file), 'utf8');
+    widthAnimations += (src.match(/animate=\{\{ width:/g) ?? []).length;
+  }
+
+  expect(widthAnimations).toBe(2);
+});

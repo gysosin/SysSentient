@@ -79,8 +79,32 @@ above is the deterministic test, not a browser measurement.
   `transform`, so the compositor handles it and there is no layout or paint
   cost. What remains is that the tab never reaches a fully idle state.
   Removing it is a design call, not a performance fix.
-- **~28 springs animating CSS `width`** is the one real item left. Making the
-  bars composited means `transform: scaleX`, which squashes the rounded end cap
-  of a `rounded-full` fill — a visible change, so it needs a design decision
-  rather than a silent swap. The elements are small leaves inside fixed-size
-  parents, so the layout they trigger is contained.
+- **The width springs are now done too** — see below. Nothing on the original
+  list remains.
+
+## The bars: slid, not stretched
+
+~28 bars — one per CPU core, plus every tile fill and meter — animated CSS
+`width`, a layout property, twice a second.
+
+`transform: scaleX` would composite but squashes the rounded end cap of a
+`rounded-full` fill, so it was not a silent swap to make. Instead each fill is
+now **full width with its rounded ends intact and translated left** by the
+remainder; the track's `overflow-hidden` clips it. The rounded cap still sits
+exactly at the fill point, and `transform` stays on the compositor.
+
+A 45% meter is `translateX(-55%)`. That inversion is the easy thing to get
+backwards — it would render every bar as its own complement while breaking
+nothing else — so `components/ui/meter.test.tsx` pins the geometry at 0%, 45%
+and 100%, the clamping either side, and the `aria-valuenow` that a visual
+change must not quietly drop.
+
+**Two width animations remain, deliberately:** the memory panel's split bar is
+two segments side by side in flow, each sized as a share of one track, so
+neither can be translated without moving the other. Two elements on one panel,
+against the ~28 converted. A test asserts exactly those two survive.
+
+**Not verified by eye.** Chrome was backgrounded for the entire session and a
+hidden tab renders the empty state, so there were no bars to look at. The
+geometry is pinned by test and equivalent by construction, but nobody has seen
+it.
