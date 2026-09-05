@@ -20,6 +20,7 @@ import {
 import { useWebSocket } from './useWebSocket';
 import { INSIGHT_REFRESH_RATE_MS, LOG_REFRESH_RATE_MS, REFRESH_RATE_MS } from '../constants';
 import { resolveBounds, useTimeRange, type TimeRange, type RangePreset } from './useTimeRange';
+import { usePageVisible } from './usePageVisible';
 
 // A feed is stale once it has missed several poll intervals. This is what makes
 // a half-open socket visible: the badge can read LIVE while no frame has
@@ -103,11 +104,13 @@ export function useDashboard(): DashboardData {
 }
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Nothing below runs while the tab is hidden; see usePageVisible.
+  const visible = usePageVisible();
   const {
     connected,
     metricsHistory: wsMetricsHistory,
     processes: wsProcesses,
-  } = useWebSocket();
+  } = useWebSocket(visible);
 
   const [metricsHistory, setMetricsHistory] = useState<SystemMetrics[]>([]);
   // Only the polling fallback writes this; the live socket supplies its own.
@@ -183,6 +186,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
    * database full of them.
    */
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const load = async () => {
       const history = await fetchInsightHistory(selectedHost);
@@ -225,11 +229,11 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       cancelled = true;
     };
-  }, [isLive, range, selectedHost]);
+  }, [isLive, range, selectedHost, visible]);
 
   // Fallback polling when the WebSocket is not connected.
   useEffect(() => {
-    if (connected) return;
+    if (connected || !visible) return;
     let cancelled = false;
 
     const fetchData = async () => {
@@ -249,9 +253,10 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [connected, selectedHost]);
+  }, [connected, selectedHost, visible]);
 
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const fetchLogs = async () => {
       const recentLogs = await fetchRecentLogs();
@@ -265,10 +270,11 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, []);
+  }, [visible]);
 
   // Firing-alert count for the nav badge. Cheap; polled on a slow cadence.
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const load = async () => {
       const alerts = await fetchActiveAlerts(selectedHost);
@@ -280,10 +286,11 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       cancelled = true;
       clearInterval(id);
     };
-  }, [selectedHost]);
+  }, [selectedHost, visible]);
 
   // Fleet inventory. Cheap and slow-moving, so polled well below metric rate.
   useEffect(() => {
+    if (!visible) return;
     let cancelled = false;
     const load = async () => {
       const list = await fetchHosts();
@@ -295,7 +302,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [visible]);
 
   // A selected host that stops reporting must not strand the dashboard on an
   // empty view forever.
@@ -307,9 +314,10 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Drives the "updated Ns ago" readout and staleness detection.
   useEffect(() => {
+    if (!visible) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [visible]);
 
   const run = async () => {
     setIsAiLoading(true);

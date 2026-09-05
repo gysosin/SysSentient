@@ -3,6 +3,7 @@ import { Server, ArrowRight, CircleAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDashboard } from '../hooks/useDashboardData';
+import { usePageVisible } from '../hooks/usePageVisible';
 import { fetchAgents, type FleetAgent } from '../services/api';
 import { Card, CardContent } from '../components/ui/card';
 import { ScreenHeading, SectionHeading } from '../components/ui/section-heading';
@@ -38,6 +39,7 @@ const Hosts: React.FC = () => {
   const { hosts, selectHost, selectedHost, current } = useDashboard();
   const navigate = useNavigate();
   const [agents, setAgents] = useState<FleetAgent[]>([]);
+  const visible = usePageVisible();
 
   const load = useCallback(async () => {
     try {
@@ -50,10 +52,11 @@ const Hosts: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!visible) return;
     void load();
     const timer = window.setInterval(() => void load(), 15000);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, visible]);
 
   // One row per machine, joining the two views of a host by id.
   const rows = useMemo(

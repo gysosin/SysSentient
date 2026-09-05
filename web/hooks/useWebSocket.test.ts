@@ -141,3 +141,58 @@ describe('useWebSocket exposes processes from the live socket', () => {
     assert.equal(result.current.metricsHistory.length, 1, 'metrics must still be recorded');
   });
 });
+
+// Chrome throttles timers in a hidden tab but not WebSocket messages, so before
+// `enabled` existed a background tab kept receiving a frame every two seconds
+// and re-rendering the whole application for it. These pin the contract that a
+// hidden tab holds no socket at all.
+describe('useWebSocket honours `enabled` (page visibility)', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test('opens no socket while disabled', () => {
+    renderHook(() => useWebSocket(false));
+    assert.equal(FakeWebSocket.instances.length, 0, 'a hidden tab must not connect');
+  });
+
+  test('closes the socket when disabled and reports disconnected', () => {
+    const { result, rerender } = renderHook(({ enabled }: { enabled: boolean }) => useWebSocket(enabled), {
+      initialProps: { enabled: true },
+    });
+    assert.equal(FakeWebSocket.instances.length, 1);
+    const socket = FakeWebSocket.instances[0];
+
+    act(() => socket.accept());
+    assert.equal(result.current.connected, true);
+
+    // The tab goes to the background.
+    act(() => rerender({ enabled: false }));
+    assert.equal(socket.readyState, FakeWebSocket.CLOSED, 'the socket must be closed, not merely ignored');
+    assert.equal(result.current.connected, false);
+    // Closing must not have kicked off a reconnect: still exactly one socket.
+    assert.equal(FakeWebSocket.instances.length, 1, 'a disabled hook must not reconnect');
+  });
+
+  test('reconnects immediately when re-enabled, without waiting out a backoff', () => {
+    const { result, rerender } = renderHook(({ enabled }: { enabled: boolean }) => useWebSocket(enabled), {
+      initialProps: { enabled: true },
+    });
+    act(() => FakeWebSocket.instances[0].accept());
+    act(() => rerender({ enabled: false }));
+    assert.equal(FakeWebSocket.instances.length, 1);
+
+    // The operator is looking at the screen again; a 30-second backoff here
+    // would show them a stale dashboard for no reason.
+    act(() => rerender({ enabled: true }));
+    assert.equal(FakeWebSocket.instances.length, 2, 'a fresh socket must be opened at once');
+
+    act(() => FakeWebSocket.instances[1].accept());
+    assert.equal(result.current.connected, true);
+  });
+});

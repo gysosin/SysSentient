@@ -13,6 +13,7 @@ import { RuleControls } from '../components/RuleControls';
 import { fetchAlertRuleViews, type AlertRuleView } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useDashboard } from '../hooks/useDashboardData';
+import { usePageVisible } from '../hooks/usePageVisible';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { ScreenHeading } from '../components/ui/section-heading';
 import { Badge } from '../components/ui/badge';
@@ -40,6 +41,7 @@ const formatWhen = (iso: string): string => {
 const Alerts: React.FC = () => {
   const { selectedHost } = useDashboard();
   const { user } = useAuth();
+  const visible = usePageVisible();
   const isAdmin = user?.role === 'admin';
   // The rule views carry override and mute state, which the plain rule list
   // does not.
@@ -65,10 +67,11 @@ const Alerts: React.FC = () => {
   }, [selectedHost]);
 
   useEffect(() => {
+    if (!visible) return;
     refresh();
     const id = setInterval(refresh, ALERT_REFRESH_MS);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [refresh, visible]);
 
   const handleAcknowledge = async (alert: Alert) => {
     setAckError(null);

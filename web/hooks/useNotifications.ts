@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchAlertHistory } from '../services/api';
+import { usePageVisible } from './usePageVisible';
 import type { AlertEvent } from '../types';
 
 /** One thing worth telling the operator about. */
@@ -51,6 +52,7 @@ export function useNotifications() {
   const [seenAt, setSeenAt] = useState<number>(() => loadSeenAt());
   const known = useRef<Set<string>>(new Set());
   const [fresh, setFresh] = useState<Notification[]>([]);
+  const visible = usePageVisible();
 
   const load = useCallback(async () => {
     const history = await fetchAlertHistory(50);
@@ -58,10 +60,11 @@ export function useNotifications() {
   }, []);
 
   useEffect(() => {
+    if (!visible) return;
     void load();
     const timer = window.setInterval(() => void load(), POLL_MS);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, visible]);
 
   const notifications = useMemo<Notification[]>(
     () =>

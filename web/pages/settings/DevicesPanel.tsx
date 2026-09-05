@@ -18,6 +18,7 @@ import { Label } from '../../components/ui/label';
 import { Skeleton } from '../../components/ui/skeleton';
 import { cn } from '../../lib/utils';
 import { LiveDot } from '../../components/ui/motion-primitives';
+import { usePageVisible } from '../../hooks/usePageVisible';
 
 /** A device is considered live if it has reported within this window. */
 const LIVE_WINDOW_MS = 90_000;
@@ -196,6 +197,7 @@ export function DevicesPanel({ isAdmin }: { isAdmin: boolean }) {
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const visible = usePageVisible();
 
   const load = useCallback(async () => {
     try {
@@ -210,12 +212,13 @@ export function DevicesPanel({ isAdmin }: { isAdmin: boolean }) {
   }, [isAdmin]);
 
   useEffect(() => {
+    if (!visible) return;
     void load();
     // Poll rather than push: enrolment is rare, and a device appearing within
     // a few seconds of running the command is responsive enough.
     const timer = window.setInterval(() => void load(), 10_000);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, visible]);
 
   const addDevice = async (event: React.FormEvent) => {
     event.preventDefault();
