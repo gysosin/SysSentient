@@ -14,7 +14,7 @@ import {
   Waves,
 } from 'lucide-react';
 
-import { useDashboard } from '../hooks/useDashboardData';
+import { useDashboard, useFeed } from '../hooks/useDashboardData';
 import SystemChart from '../components/SystemChart';
 import { ExportButton } from '../components/ExportButton';
 import { MetricDrilldown, MetricKey } from '../components/MetricDrilldown';
@@ -322,12 +322,86 @@ function Kpi({
 const seriesOf = (history: SystemMetrics[], key: keyof SystemMetrics): number[] =>
   history.slice(-32).map((m) => Number(m[key]) || 0);
 
+/**
+ * The hero's telemetry eyebrow: a status dot and a label.
+ *
+ * Its own component because the feed republishes every second. Overview renders
+ * four charts, eight tiles and seven sparklines; subscribing to the feed from
+ * the page would redraw all of it once a second to update these few words.
+ */
+const HeroFeedEyebrow: React.FC = () => {
+  const feed = useFeed();
+  const stale = feed.level === 'stale' || feed.level === 'down';
+  return (
+    <>
+      <span
+        className={cn(
+          'size-2 rounded-full',
+          feed.level === 'live' ? 'live-pulse bg-brand' : stale ? 'bg-crit' : 'bg-warn',
+        )}
+        aria-hidden="true"
+      />
+      {feed.level === 'live' ? 'Live telemetry' : `${feed.label} telemetry`}
+    </>
+  );
+};
+
+/** The "last sample Ns ago" line, isolated for the same reason. */
+const LastSampleNote: React.FC<{ loading: boolean }> = ({ loading }) => {
+  const feed = useFeed();
+  return (
+    <span className="text-mute text-2xs">
+      {loading ? 'awaiting first sample' : `last sample ${feed.detail}`}
+    </span>
+  );
+};
+
+/**
+ * The one line of hero prose that changes with the feed.
+ *
+ * A stale feed has to say so loudly, but that sentence is the only part of the
+ * hero that depends on the clock.
+ */
+const VerdictProse: React.FC<{ loading: boolean; fallback: string }> = ({ loading, fallback }) => {
+  const feed = useFeed();
+  const stale = feed.level === 'stale' || feed.level === 'down';
+  if (!loading && stale) {
+    return (
+      <>
+        The feed is {feed.label.toLowerCase()}. Every value on this screen is history, not current
+        state.
+      </>
+    );
+  }
+  return <>{fallback}</>;
+};
+
+/**
+ * Dims the page while the feed is stale.
+ *
+ * Takes its content as `children` rather than reading the feed from Overview.
+ * This component re-renders every second, but `children` is the same element
+ * object each time, so React skips the subtree underneath -- the charts and
+ * tiles are not redrawn just because a clock ticked.
+ */
+const StaleDimmer: React.FC<{ loading: boolean; children: React.ReactNode }> = ({
+  loading,
+  children,
+}) => {
+  const feed = useFeed();
+  const stale = feed.level === 'stale' || feed.level === 'down';
+  return (
+    <div className={cn('space-y-6', stale && !loading && 'opacity-60 transition-opacity')}>
+      {children}
+    </div>
+  );
+};
+
 const Overview: React.FC = () => {
-  const { current, metricsHistory, hasData, feed, processes, logs, hosts, firingAlerts, ai } =
+  const { current, metricsHistory, hasData, processes, logs, hosts, firingAlerts, ai, zoomRange } =
     useDashboard();
   const [drilldown, setDrilldown] = React.useState<MetricKey | null>(null);
   const loading = !hasData;
-  const stale = feed.level === 'stale' || feed.level === 'down';
 
   const memPct = percent(current.memoryUsed, current.memoryTotal);
   const swapPct = percent(current.swapUsed, current.swapTotal);
@@ -375,9 +449,7 @@ const Overview: React.FC = () => {
 
   const verdictProse = loading
     ? 'Waiting for the first sample from the collector.'
-    : stale
-      ? `The feed is ${feed.label.toLowerCase()}. Every value on this screen is history, not current state.`
-      : concerns.length === 0
+    : concerns.length === 0
         ? `Realtime health for ${current.hostname || 'this host'}. The machine is online, the feed is current, and nothing is above threshold.`
         : `Realtime health for ${current.hostname || 'this host'}. ${concerns.length} of 5 tracked resources ${concerns.length === 1 ? 'is' : 'are'} above threshold; the rest are nominal.`;
 
@@ -394,25 +466,39 @@ const Overview: React.FC = () => {
   const errorLogs = logs.filter((l) => l.level === 'ERROR').length;
   const warnLogs = logs.filter((l) => l.level === 'WARN').length;
 
+  /**
+   * The seven sparkline series, computed once per history change.
+   *
+   * These were built inline in the JSX, so each render produced seven fresh
+   * 32-element arrays. Sparkline memoises on array identity, so a new array
+   * every render meant it recomputed its geometry every render however
+   * unchanged the numbers were.
+   */
+  const spark = React.useMemo(
+    () => ({
+      cpuLoad: seriesOf(metricsHistory, 'cpuLoad'),
+      memoryUsed: seriesOf(metricsHistory, 'memoryUsed'),
+      swapUsed: seriesOf(metricsHistory, 'swapUsed'),
+      loadAvg1: seriesOf(metricsHistory, 'loadAvg1'),
+      diskWrite: seriesOf(metricsHistory, 'diskWrite'),
+      networkRx: seriesOf(metricsHistory, 'networkRx'),
+      temperature: seriesOf(metricsHistory, 'temperature'),
+    }),
+    [metricsHistory],
+  );
+
   // Top consumers, sorted here rather than trusting collector order.
   const triage = [...processes].sort((a, b) => b.cpu - a.cpu).slice(0, 4);
 
   return (
-    <div className={cn('space-y-6', stale && !loading && 'opacity-60 transition-opacity')}>
+    <StaleDimmer loading={loading}>
       {/* THE GLANCE. Answers "is anything wrong?" before any reading happens —
           from the size and colour of one phrase, at wall-display distance. */}
       <section className="border-line bg-panel relative overflow-hidden rounded-xl border px-5 py-7 sm:px-8 md:py-10">
         <div className="scanline" aria-hidden="true" />
         <div className="relative max-w-3xl">
           <div className="text-mute flex flex-wrap items-center gap-3 text-2xs font-semibold tracking-[0.22em] uppercase">
-            <span
-              className={cn(
-                'size-2 rounded-full',
-                feed.level === 'live' ? 'live-pulse bg-brand' : stale ? 'bg-crit' : 'bg-warn',
-              )}
-              aria-hidden="true"
-            />
-            {feed.level === 'live' ? 'Live telemetry' : `${feed.label} telemetry`}
+            <HeroFeedEyebrow />
             <span className="text-melt">/</span>
             <span className="text-foreground font-mono tracking-normal">
               {current.hostname || 'unknown host'}
@@ -443,7 +529,7 @@ const Overview: React.FC = () => {
           </h1>
 
           <p className="text-muted-foreground mt-5 max-w-xl text-sm leading-relaxed">
-            {verdictProse}
+            <VerdictProse loading={loading} fallback={verdictProse} />
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -461,9 +547,7 @@ const Overview: React.FC = () => {
                 <ChevronRight aria-hidden="true" />
               </Link>
             </Button>
-            <span className="text-mute text-2xs">
-              {loading ? 'awaiting first sample' : `last sample ${feed.detail}`}
-            </span>
+            <LastSampleNote loading={loading} />
           </div>
         </div>
       </section>
@@ -516,7 +600,7 @@ const Overview: React.FC = () => {
             sub={`${current.cpuPerCore.length} cores`}
             tone={cpuTone}
             fill={current.cpuLoad}
-            series={seriesOf(metricsHistory, 'cpuLoad')}
+            series={spark.cpuLoad}
             loading={loading}
           />
         </StaggerItem>
@@ -530,7 +614,7 @@ const Overview: React.FC = () => {
             sub={`${(current.memoryUsed / 1024).toFixed(1)} / ${(current.memoryTotal / 1024).toFixed(1)} GB`}
             tone={memTone}
             fill={memPct}
-            series={seriesOf(metricsHistory, 'memoryUsed')}
+            series={spark.memoryUsed}
             loading={loading}
           />
         </StaggerItem>
@@ -544,7 +628,7 @@ const Overview: React.FC = () => {
             sub={`${current.swapUsed.toFixed(0)} / ${current.swapTotal.toFixed(0)} MB`}
             tone={swapTone}
             fill={swapPct}
-            series={seriesOf(metricsHistory, 'swapUsed')}
+            series={spark.swapUsed}
             loading={loading}
           />
         </StaggerItem>
@@ -557,7 +641,7 @@ const Overview: React.FC = () => {
             decimals={2}
             sub={`5m ${current.loadAvg5.toFixed(2)} · 15m ${current.loadAvg15.toFixed(2)}`}
             tone={loadTone}
-            series={seriesOf(metricsHistory, 'loadAvg1')}
+            series={spark.loadAvg1}
             loading={loading}
           />
         </StaggerItem>
@@ -570,7 +654,7 @@ const Overview: React.FC = () => {
             value={current.diskIOPS}
             suffix=" iops"
             sub={`read ${current.diskRead.toFixed(1)} · write ${current.diskWrite.toFixed(1)} MB/s`}
-            series={seriesOf(metricsHistory, 'diskWrite')}
+            series={spark.diskWrite}
             seriesColor="var(--chart-3)"
             loading={loading}
           />
@@ -583,7 +667,7 @@ const Overview: React.FC = () => {
             value={current.networkRx + current.networkTx}
             suffix=" KB/s"
             sub={`rx ${current.networkRx.toFixed(0)} · tx ${current.networkTx.toFixed(0)} KB/s`}
-            series={seriesOf(metricsHistory, 'networkRx')}
+            series={spark.networkRx}
             loading={loading}
           />
         </StaggerItem>
@@ -597,7 +681,7 @@ const Overview: React.FC = () => {
             suffix="°C"
             sub={current.temperature > 0 ? 'hottest sensor' : 'no sensor reported'}
             tone={tempTone}
-            series={seriesOf(metricsHistory, 'temperature')}
+            series={spark.temperature}
             loading={loading}
           />
         </StaggerItem>
@@ -1000,10 +1084,10 @@ const Overview: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <SystemChart title="CPU usage" data={metricsHistory} dataKey="cpuLoad" color="var(--chart-1)" unit="%" maxValue={100} />
-        <SystemChart title="Memory used" data={metricsHistory} dataKey="memoryUsed" color="var(--chart-2)" unit=" MB" />
-        <SystemChart title="Disk write" data={metricsHistory} dataKey="diskWrite" color="var(--chart-3)" unit=" MB/s" />
-        <SystemChart title="Network TX" data={metricsHistory} dataKey="networkTx" color="var(--chart-5)" unit=" KB/s" />
+        <SystemChart title="CPU usage" data={metricsHistory} dataKey="cpuLoad" color="var(--chart-1)" unit="%" maxValue={100} onZoom={zoomRange} />
+        <SystemChart title="Memory used" data={metricsHistory} dataKey="memoryUsed" color="var(--chart-2)" unit=" MB" onZoom={zoomRange} />
+        <SystemChart title="Disk write" data={metricsHistory} dataKey="diskWrite" color="var(--chart-3)" unit=" MB/s" onZoom={zoomRange} />
+        <SystemChart title="Network TX" data={metricsHistory} dataKey="networkTx" color="var(--chart-5)" unit=" KB/s" onZoom={zoomRange} />
       </div>
 
       <MetricDrilldown
@@ -1013,7 +1097,7 @@ const Overview: React.FC = () => {
         history={metricsHistory}
         processes={processes}
       />
-    </div>
+    </StaleDimmer>
   );
 };
 

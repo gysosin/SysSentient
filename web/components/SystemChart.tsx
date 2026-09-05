@@ -11,7 +11,6 @@ import {
 } from 'recharts';
 import { Maximize2 } from 'lucide-react';
 
-import { useDashboard } from '../hooks/useDashboardData';
 import { SystemMetrics } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -30,6 +29,15 @@ interface SystemChartProps {
   title: string;
   unit: string;
   maxValue?: number;
+  /**
+   * Called when a drag selects a window.
+   *
+   * A prop rather than a context read: subscribing to the dashboard context
+   * makes React.memo useless, because a context change re-renders a memoised
+   * component regardless of its props. Four charts re-rendering on every
+   * context publish was most of the idle cost on this page.
+   */
+  onZoom?: (from: Date, to: Date) => void;
 }
 
 /** Round a domain ceiling up to a readable 1/2/5 x 10^n step, so axes read
@@ -64,10 +72,9 @@ const formatClock = (ms: number): string => {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
 };
 
-const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, unit, maxValue }) => {
+const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, unit, maxValue, onZoom }) => {
   const gradientId = `gradient-${dataKey}`;
   const [expanded, setExpanded] = React.useState(false);
-  const { zoomRange } = useDashboard();
   // Drag bounds, in chart-x (epoch ms) units. Null while not dragging.
   const [dragFrom, setDragFrom] = React.useState<number | null>(null);
   const [dragTo, setDragTo] = React.useState<number | null>(null);
@@ -83,11 +90,11 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
   const commitZoom = React.useCallback(() => {
     if (dragFrom !== null && dragTo !== null && dragFrom !== dragTo) {
       const [from, to] = dragFrom < dragTo ? [dragFrom, dragTo] : [dragTo, dragFrom];
-      zoomRange(new Date(from), new Date(to));
+      onZoom?.(new Date(from), new Date(to));
     }
     setDragFrom(null);
     setDragTo(null);
-  }, [dragFrom, dragTo, zoomRange]);
+  }, [dragFrom, dragTo, onZoom]);
 
   // A flat series on an 'auto' domain renders as a wildly oscillating sawtooth,
   // which reads as instability that isn't there. Pad a floor/ceiling instead.
@@ -246,4 +253,8 @@ const SystemChart: React.FC<SystemChartProps> = ({ data, dataKey, color, title, 
   );
 };
 
-export default SystemChart;
+/**
+ * Memoised: the charts only need to redraw when their data or styling changes,
+ * not every time anything in the dashboard context does.
+ */
+export default React.memo(SystemChart);

@@ -10,6 +10,7 @@ import {
 import { Badge } from './ui/badge';
 import { Meter } from './ui/motion-primitives';
 import SystemChart from './SystemChart';
+import { useDashboard } from '../hooks/useDashboardData';
 import { cn } from '../lib/utils';
 import { Filesystem, Process, SystemMetrics } from '../types';
 
@@ -202,6 +203,11 @@ interface Props {
  * that says 90% told you nothing you did not already know.
  */
 export function MetricDrilldown({ metric, onClose, current, history, processes }: Props) {
+  // Read here rather than in SystemChart: the chart is memoised, and a context
+  // subscription inside it would defeat that for all four charts on the
+  // Overview. This dialog is only mounted while open, so reading context here
+  // costs nothing when it is closed.
+  const { zoomRange: onZoom } = useDashboard();
   if (!metric) return null;
 
   const memPct = current.memoryTotal > 0 ? (current.memoryUsed / current.memoryTotal) * 100 : 0;
@@ -223,7 +229,7 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
           <Section title="Per-core distribution"><CoreBreakdown cores={current.cpuPerCore} /></Section>
           <Section title="Top consumers"><TopConsumers processes={processes} by="cpu" /></Section>
           <Section title="History">
-            <SystemChart title="CPU usage" data={history} dataKey="cpuLoad" color="var(--chart-1)" unit="%" maxValue={100} />
+            <SystemChart title="CPU usage" data={history} dataKey="cpuLoad" color="var(--chart-1)" unit="%" maxValue={100} onZoom={onZoom} />
           </Section>
         </>
       ),
@@ -241,7 +247,7 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
           </div>
           <Section title="Top consumers"><TopConsumers processes={processes} by="memory" /></Section>
           <Section title="History">
-            <SystemChart title="Memory used" data={history} dataKey="memoryUsed" color="var(--chart-2)" unit=" MB" />
+            <SystemChart title="Memory used" data={history} dataKey="memoryUsed" color="var(--chart-2)" unit=" MB" onZoom={onZoom} />
           </Section>
         </>
       ),
@@ -265,7 +271,7 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
             <TopConsumers processes={processes} by="memory" />
           </Section>
           <Section title="History">
-            <SystemChart title="Swap used" data={history} dataKey="swapUsed" color="var(--chart-4)" unit=" MB" />
+            <SystemChart title="Swap used" data={history} dataKey="swapUsed" color="var(--chart-4)" unit=" MB" onZoom={onZoom} />
           </Section>
         </>
       ),
@@ -291,7 +297,7 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
           </Section>
           <Section title="Top consumers"><TopConsumers processes={processes} by="cpu" /></Section>
           <Section title="History">
-            <SystemChart title="Load average (1m)" data={history} dataKey="loadAvg1" color="var(--chart-3)" unit="" />
+            <SystemChart title="Load average (1m)" data={history} dataKey="loadAvg1" color="var(--chart-3)" unit="" onZoom={onZoom} />
           </Section>
         </>
       ),
@@ -309,8 +315,8 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
           </div>
           <Section title="History">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <SystemChart title="Disk read" data={history} dataKey="diskRead" color="var(--chart-3)" unit=" MB/s" />
-              <SystemChart title="Disk write" data={history} dataKey="diskWrite" color="var(--chart-4)" unit=" MB/s" />
+              <SystemChart title="Disk read" data={history} dataKey="diskRead" color="var(--chart-3)" unit=" MB/s" onZoom={onZoom} />
+              <SystemChart title="Disk write" data={history} dataKey="diskWrite" color="var(--chart-4)" unit=" MB/s" onZoom={onZoom} />
             </div>
           </Section>
           <Section title="Mounted filesystems"><FilesystemBreakdown filesystems={current.filesystems} /></Section>
@@ -330,8 +336,8 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
           </div>
           <Section title="History">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <SystemChart title="Network RX" data={history} dataKey="networkRx" color="var(--chart-2)" unit=" KB/s" />
-              <SystemChart title="Network TX" data={history} dataKey="networkTx" color="var(--chart-5)" unit=" KB/s" />
+              <SystemChart title="Network RX" data={history} dataKey="networkRx" color="var(--chart-2)" unit=" KB/s" onZoom={onZoom} />
+              <SystemChart title="Network TX" data={history} dataKey="networkTx" color="var(--chart-5)" unit=" KB/s" onZoom={onZoom} />
             </div>
           </Section>
         </>
@@ -361,7 +367,7 @@ export function MetricDrilldown({ metric, onClose, current, history, processes }
             </Section>
           )}
           <Section title="History">
-            <SystemChart title="Temperature" data={history} dataKey="temperature" color="var(--chart-4)" unit=" °C" />
+            <SystemChart title="Temperature" data={history} dataKey="temperature" color="var(--chart-4)" unit=" °C" onZoom={onZoom} />
           </Section>
         </>
       ),
