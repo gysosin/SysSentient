@@ -192,10 +192,16 @@ function Stat({
             ceiling (throughput) get no rule rather than a meaningless one. */}
         {fill !== undefined && !loading && (
           <div className="bg-panel-strong mt-3 h-1.5 overflow-hidden rounded-full">
+      {/* Slid, not stretched. Animating `width` is a layout property, and with
+          one of these per CPU core plus every tile and meter, ~28 of them
+          re-ran layout twice a second. The fill is full width with its rounded
+          ends intact and is translated left instead; the track clips it, so
+          the rounded cap still sits exactly at the fill point and `transform`
+          stays on the compositor. */}
             <motion.div
-              className={cn('h-full rounded-full', FILL_TONE[tone])}
+              className={cn('h-full w-full rounded-full', FILL_TONE[tone])}
               initial={false}
-              animate={{ width: `${Math.min(100, Math.max(0, fill))}%` }}
+              animate={{ x: `-${100 - Math.min(100, Math.max(0, fill))}%` }}
               transition={{ type: 'spring', stiffness: 180, damping: 26 }}
             />
           </div>
@@ -260,9 +266,9 @@ function CoreGrid({ cores }: { cores: number[] }) {
                 nothing to be a proportion of. */}
             <div className="bg-background/60 relative h-1.5 w-full overflow-hidden rounded-full">
               <motion.div
-                className={cn('absolute inset-y-0 left-0 rounded-full', fill)}
+                className={cn('h-full w-full rounded-full', fill)}
                 initial={false}
-                animate={{ width: `${Math.min(100, Math.max(2, core))}%` }}
+                animate={{ x: `-${100 - Math.min(100, Math.max(2, core))}%` }}
                 transition={{ type: 'spring', stiffness: 180, damping: 24 }}
               />
             </div>
@@ -885,6 +891,11 @@ const Overview: React.FC = () => {
                 moment anything asks for it, so the split between genuinely
                 committed memory and reclaimable cache is the difference
                 between a healthy host and one about to swap. */}
+            {/* The two segments below still animate `width`, and deliberately
+                so: they sit side by side in flow, each sized as a share of the
+                same track, so one cannot be translated without moving the
+                other. Two elements rather than the ~28 single-fill bars, and
+                only on this one panel. */}
             <div className="bg-panel-strong border-line mt-5 flex h-3 w-full overflow-hidden rounded-full border">
               <motion.div
                 className="bg-ok"
