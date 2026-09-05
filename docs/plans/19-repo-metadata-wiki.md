@@ -59,3 +59,21 @@ UI: the API enables the wiki (done — `has_wiki` is now true) but will not
 initialise it, and `git push` to `SysSentient.wiki.git` fails with "Repository
 not found" until it is. `docs/wiki/README.md` has the one click and the sync
 command.
+
+
+## Publishing, revisited
+
+`tool/publish_wiki.sh` now does the sync in one command and reports what to do
+when the wiki has no pages yet.
+
+Every automated route to that first page was tried and none exists: the REST
+API has no wiki endpoint (404), `has_wiki` is true yet `<repo>.wiki.git` is not
+provisioned, and clone and push both fail with "Repository not found"
+authenticated with `repo` scope as well as anonymously. GitHub creates the wiki
+repository only when a page is saved from the browser.
+
+Two bugs surfaced while testing the script against a stand-in repository rather
+than assuming it worked: it committed with no git identity (a wiki clone
+inherits neither this repository's config nor necessarily a global one), and
+its `[A-Z]*.md` glob published `README.md` as a wiki page despite a comment
+claiming it excluded it.
