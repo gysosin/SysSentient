@@ -74,9 +74,20 @@ const Row: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = 
   </div>
 );
 
+/**
+ * The live feed row.
+ *
+ * Its own component because it reads the feed, which republishes every second.
+ * Reading that from the page would redraw the whole settings screen on each
+ * tick to update one line.
+ */
+const FeedRow: React.FC = () => {
+  const feed = useFeed();
+  return <Row label="Feed" value={`${feed.label} — ${feed.detail}`} />;
+};
+
 const Settings: React.FC = () => {
   const { current, hosts } = useDashboard();
-  const feed = useFeed();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const visible = usePageVisible();
@@ -258,7 +269,7 @@ const Settings: React.FC = () => {
                       every mode now, so a zero here means something is
                       genuinely wrong rather than a known gap being hidden. */}
                   <Row label="Fleet" value={`${hosts.length} host${hosts.length === 1 ? '' : 's'}`} />
-                  <Row label="Feed" value={`${feed.label} — ${feed.detail}`} />
+                  <FeedRow />
                 </dl>
               )}
             </CardContent>

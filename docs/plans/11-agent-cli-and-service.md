@@ -55,7 +55,13 @@ cd web && npm audit --audit-level=moderate && npm run typecheck && npm test && n
 guaranteed to load through the daemon's own reader, and prints the start
 command. The spool fix that this shard also called for ships too — see below.
 
-**Service installation from the CLI did not ship.** `agent join` prints the
+**Service installation from the CLI did not ship *in this shard*** — it
+shipped later in [22-service-install.md](22-service-install.md), which added
+`sys-sentient service install|uninstall|status` for systemd, launchd and the
+Windows service manager. The paragraph below describes the state at the time
+this shard closed.
+
+**Original note.** `agent join` prints the
 command to run rather than registering a systemd unit, a Windows service or a
 launchd job itself. The packages already install a service unit
 (`packaging/`), so the gap only affects someone who installed from a raw

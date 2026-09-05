@@ -139,3 +139,29 @@ test('a consumer that reads the feed still updates every second', async () => {
   // counting is worse than no readout at all.
   expect(renders - afterMount).toBeGreaterThanOrEqual(4);
 });
+
+test('no page subscribes to the feed at page level', async () => {
+  // A page that calls useFeed() directly re-renders once a second, taking its
+  // whole subtree with it. The feed belongs in small leaf components; this
+  // catches a regression that would otherwise only show up in a profiler.
+  const { readFile } = await import('node:fs/promises');
+  const { resolve } = await import('node:path');
+  const pages = [
+    'pages/Overview.tsx',
+    'pages/Processes.tsx',
+    'pages/Logs.tsx',
+    'pages/Settings.tsx',
+  ];
+
+  const offenders: string[] = [];
+  for (const page of pages) {
+    // vitest runs with the web/ directory as its working directory.
+    const src = await readFile(resolve(process.cwd(), page), 'utf8');
+    // The page component itself, everything after its declaration.
+    const decl = src.search(/^const (Overview|Processes|Logs|Settings): React\.FC/m);
+    if (decl === -1) continue;
+    if (/\buseFeed\(\)/.test(src.slice(decl))) offenders.push(page);
+  }
+
+  expect(offenders).toEqual([]);
+});
