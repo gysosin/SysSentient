@@ -36,7 +36,7 @@ jobs:
         run: python3 tool/verify_site.py
 
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - name: Deploy
